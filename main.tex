@@ -182,7 +182,7 @@ As discussed, ANNS is often prefered to an \textit{approximate} NNS for modern p
 \label{eq:anns_def}
 \end{equation}
 
-The \emph{accuracy} of a $k$ANNS method is typically measured using \emph{recall}. For a given $k$ and query $\bq$, the recall $R_\bq@k$ measures the proportion of the points returned by ANNS that are the true nearest neighbours to $\bq$. Formally, if $\tNq$ and $N_\bq$ containing the approximate and exact $k$ nearest neighbours to $\bq$ then $R@k$ can be defined using Eq.~\ref{eq:recall}. In practical settings, queries are often executed in batches of size $n_q$, and recall is therefore reported as the average $R@k$ across all queries. For a given dataset, an often shared goal of ANNS algorithms is to reduce query time over a range of fixed recall values.
+\paragraph{Measuring accuracy.} The \emph{accuracy} of a $k$ANNS method is typically measured using \emph{recall}. For a given $k$ and query $\bq$, the recall $R_\bq@k$ measures the proportion of the points returned by ANNS that are the true nearest neighbours to $\bq$. Formally, if $\tNq$ and $N_\bq$ containing the approximate and exact $k$ nearest neighbours to $\bq$ then $R@k$ can be defined using Eq.~\ref{eq:recall}. In practical settings, queries are often executed in batches of size $n_q$, and recall is therefore reported as the average $R@k$ across all queries. For a given dataset, an often shared goal of ANNS algorithms is to reduce query time over a range of fixed recall values.
 
 \begin{equation}
     \label{eq:recall}
@@ -191,6 +191,35 @@ The \emph{accuracy} of a $k$ANNS method is typically measured using \emph{recall
     \end{aligned}
 \end{equation}
 
+\subsubsection{Distance Metrics}
+
+We will introduce two methods to measure distances in the context of NNS. 
+
+\paragraph{Inner product distance}
+The inner product $\bx^\top \bq$ is strictly speaking a similarity measure rather than a distance metric, as it is maximised for nearby points and does not satisfy metric properties such as the triangle inequality~\cite{chen2009similarity}. However, to preserve consistency with the nearest neighbour formulation in Eq.~\ref{eq:nns_def}, we define the inner product distance $\dist_{IP}$ as a simple inverse of similarity:
+
+\begin{equation}
+\dist_{IP}(\bx, \bq) = -\,\bx^\top \bq.
+\end{equation}
+
+Minimising $\dist_{IP}$ is therefore equivalent to maximising the inner product. Since this transformation preserves rankings, both objectives yield identical nearest neighbour results. Consequently, we treat inner product maximisation and $\dist_{IP}$ minimisation interchangeably throughout this paper.
+
+\paragraph{Angular distance.}
+
+Angular distance is a distance metric measuring the angle $\theta_{\bx\by}$ between two points:
+
+\begin{equation}
+    \theta_{\bx \by} = \arccos\!\left(\frac{\dotxy}{\nbx \nby}\right).
+    \label{eq:angular-distance}
+\end{equation}
+
+A useful property of angular distance is that it's invariant under unit normalisation. Consequently, replacing vectors by $\hat{\bx}=\bx/\nbx$ does not alter pairwise angular distances or neighbour rankings. On the unit-sphere $\nbx=\nby=1$, so we can simplify Eq.~\ref{eq:angular-distance} to:
+
+\begin{equation}
+\theta_{\bx\by} = \arccos(\bx^\top\by).
+\end{equation}
+
+Since $\arccos$ strictly decreases as $\bx^\top\by$ increases, maximising the inner product on the unit-sphere is equivalent to minimising the angular distance. This is a useful property we will use in this paper.
 
 \subsection{Locality Sensitive Hashing}
 \label{sec:lsh}
@@ -272,19 +301,13 @@ Minimising the factor $\rho$ is a deciding factor on the practicality of an LSH 
 
 \subsection{LSH families for angular distance}
 
-This section studies the values of $\rho$ of common LSH families for angular distance for the \crNN problem, including SimHash~\cite{charikar2002similarity} and Falconn~\cite{andoni2015practicaloptimallshangular}. Before we introduce SimHash and Falconn formally, we will give an introduction to angular distance and an embedding trick to simplify the study of $\rho$. The angular distance $\theta_{\bx \by} \in [0, \pi]$ between two vectors $\bx$ and $\by$ is given as:
-
-\begin{equation}
-    \theta_{\bx \by} = \arccos\!\left(\frac{\bx^\top \by}{\nbx \nby}\right)
-\end{equation}
-
-We can then define the cosine similarity between $\bx$ and $\by$ as:
+This section studies the values of $\rho$ of common LSH families for angular distance for the \crNN problem, including SimHash~\cite{charikar2002similarity} and Falconn~\cite{andoni2015practicaloptimallshangular}. We can define the cosine similarity between $\bx$ and $\by$ in-terms of angular distance from Eq.~\ref{eq:angular-distance} as:
 
 \begin{equation}
     \cosim(\bx, \by) = \cos(\theta_{\bx \by}) = \frac{\bx^\top \by}{\nbx \nby}
 \end{equation}
 
-Maximising cosine similarity is equivalent to minimising angular distance. For ease of notation when deriving different $\rho$, we can embed Euclidean distance on the unit sphere into cosine similarity. Thus minimising Euclidean distance on the unit-sphere is shown to be equivalent to minimising angular distance. To illustrate, take $\bx, \by \in \Rd$, with $\|\bx\|=\|\by\|=1$. Using the inner product expansion of Euclidean distance we can write:
+Maximising cosine similarity is thus equivalent to minimising angular distance. For ease of notation when deriving different $\rho$, we can embed Euclidean distance on the unit sphere into cosine similarity. Thus minimising Euclidean distance on the unit-sphere is shown to be equivalent to minimising angular distance. To illustrate, take $\bx, \by \in \Rd$, with $\|\bx\|=\|\by\|=1$. Using the inner product expansion of Euclidean distance we can write:
 
 \begin{equation}
     \|\bx-\by\|^2 = \|\bx\|^2 + \|\by\|^2 - 2 \dotxy = 2 - 2\dotxy
