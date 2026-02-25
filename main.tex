@@ -16,6 +16,7 @@
 \usepackage{hyperref}
 \usepackage[section]{placeins}
 \usepackage{placeins} 
+\usepackage[inkscapelatex=false]{svg}
 
 \usepackage{easyReview}
 
@@ -40,6 +41,7 @@
 \newcommand{\hS}{h_S}
 
 \newcommand{\dist}{\mathrm{dist}}
+\newcommand{\distip}{\mathrm{dist}_{\mathrm{IP}}}
 \newcommand{\cosim}{\mathrm{sim}}
 
 \newcommand{\bigO}{\mathcal{O}}
@@ -164,52 +166,54 @@ Modern ANNS algorithms are typically divided two separate stages: \emph{indexing
 \subsection{Nearest Neighbour Search}
 \label{sec:anns}
 
-Consider a dataset $X \subset \Real^d$ containing $n$ points and $d$ dimensions. NNS find the closest point $\bxs \in X$ to a query $\bq$. The point $\bxs$ is thus known as the \emph{nearest neighbour} to $\bq$. The \textit{closeness} of a point and a query is measured by a distance function $\dist : \Real^d \times \Real^d \rightarrow \Real$. The $\dist$ function can take various forms, although commonly it is implemented as angular, inner product or Euclidean (L2) distance. Eq.~\ref{eq:nns_def} formalises the idea of a nearest neighbour. The closely related $k$NNS problem finds the set of the closest $k$ nearest neighbours to a query $\bq$. A graphical explanation of NNS and $k$NNS is given in Fig.~\ref{fig:nns-example}.
+Consider a dataset $X \subset \Real^d$ containing $n$ points and $d$ dimensions. NNS finds the closest point - the \emph{nearest neighbour} -  $\bxs \in X$ to a query $\bq$. The \textit{closeness} of a point and a query is measured by a distance function $\dist : \Real^d \times \Real^d \rightarrow \Real$. The $\dist$ function can take various forms, although commonly it is implemented as angular, inner product or Euclidean (L2) distance. We formalise the concept of a nearest neighbour in Eq.~\ref{eq:nns_def}. The closely related $k$NNS problem finds the set of the closest $k$ nearest neighbours to a query $\bq$. A graphical explanation of NNS and $k$NNS is given in Fig.~\ref{fig:nns-example}.
 
 \begin{equation}
 \bxs = \arg\min_{\bx \in X} \dist(\bx, \bq)
 \label{eq:nns_def}
 \end{equation}
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.5\linewidth]{figs/diags/nns.png}
-    \caption{Illustration of the NNS and $k$NNS problem using L2 distance. \\ Here $\bx_{2}$ is the nearest neighbour to $\bq$ and $\{ \bx_{1}, \bx_{2}, \bx_{4}, \bx_{7} \}$ are the $k=4$ nearest neighbours to $\bq$.}
-    \label{fig:nns-example}
-\end{figure}
-
-As discussed, ANNS is often prefered to an \textit{approximate} NNS for modern practical applications. To define ANNS, given an approximation factor $c > 1 \in \Real$, ANNS returns a point $\bx' \in X$ whose distance to the query is at most a factor $c$ larger than that of the true nearest neighbour, as defined in Eq.~\ref{eq:anns_def}. This notion extends directly to the $k$-nearest neighbour case: $k$ANNS returns $k$ points whose distances to the query $\bq$ are within the same approximation bound. A graphical explanation of this ANNS using Euclidean distance is shown in Fig.~\ref{fig:nns-example}. For a query $\bq$, distance to its true nearest neighbour $\bx_3$ equal to $r$, and $c > 1$. The set $\tNq =  \{\bx_1, \bx_2, \bx_4\}$ contains all points within $cr$ distance of $\bq$, thus are \emph{approximate} nearest neighbours to $\bq$. Any two points from $\tNq$ would solve the $k$ANNS problem for $\bq$ given $k=2$. 
+As discussed, ANNS is often preferred to an \textit{exact} NNS for modern practical applications. To define ANNS, given an approximation factor $c > 1 \in \Real$, ANNS returns a point $\bx' \in X$ whose distance to the query is at most a factor $c$ larger than that of the true nearest neighbour, as defined in Eq.~\ref{eq:anns_def}. This notion extends directly to the $k$-nearest neighbour case: $k$ANNS returns $k$ points whose distances to the query $\bq$ are within the same approximation bound. A graphical explanation of this ANNS using Euclidean distance is shown in Fig.~\ref{fig:nns-example}. For a query $\bq$, the distance to its true nearest neighbour $\bx_3$ equal to $r$. Given a $c > 1$, the set $\tNq =  \{\bx_1, \bx_2, \bx_4\}$ contains all points within $cr$ distance of $\bq$, thus are \emph{approximate} nearest neighbours to $\bq$. Any two points from $\tNq$ would solve the $k$ANNS problem for $\bq$ given $k=2$. 
 
 \begin{equation}
 \dist(\bx', \bq) \leq c \cdot \dist(\bxs, \bq)
 \label{eq:anns_def}
 \end{equation}
 
-\paragraph{Measuring accuracy.} The \emph{accuracy} of a $k$ANNS method is typically measured using \emph{recall}. For a given $k$ and query $\bq$, the recall $R_\bq@k$ measures the proportion of the points returned by ANNS that are the true nearest neighbours to $\bq$. Formally, if $\tNq$ and $N_\bq$ containing the approximate and exact $k$ nearest neighbours to $\bq$ then $R@k$ can be defined using Eq.~\ref{eq:recall}. In practical settings, queries are often executed in batches of size $n_q$, and recall is therefore reported as the average $R@k$ across all queries. For a given dataset, an often shared goal of ANNS algorithms is to reduce query time over a range of fixed recall values.
+\paragraph{Measuring accuracy.} The \emph{accuracy} of a $k$ANNS method is typically measured using \emph{recall}. For a given $k$ and query $\bq$, the recall $R_\bq@k$ measures the proportion of the points returned by ANNS that are the true nearest neighbours to $\bq$. However, in practical use cases, queries are executed \emph{batch-wise} from a set $Q$ containing $n_q$ points. Therefore, recall is reported as the \emph{average} $R_\bq@k$ across a batch, as defined in Eq.~\ref{eq:recall}. For a given dataset, ANNS algorithms typically aim to minimise query processing time for any fixed recall.
 
 \begin{equation}
     \label{eq:recall}
     \begin{aligned}
-    R_\bq@k = \frac{1}{k}\left|\tNq \cap N_\bq \right| \; , \; R@k = \frac{1}{n_q}\sum_{\bq} R_\bq@k
+    R@k = \frac{1}{n_q}\sum_{\bq \in Q} R_\bq@k
+    \quad \text{where:} \quad
+    R_\bq@k = \frac{1}{k}\left| k\text{ANNS}(\bq) \cap k\text{NNS}(\bq) \right| \; , \; 
     \end{aligned}
 \end{equation}
+
+\begin{figure}[H]
+    \centering
+    \includesvg[width=0.5\linewidth]{figs/diags/nns.drawio.svg}
+    \caption{Illustration of the NNS, $k$NNS and ANNS problems using L2 (straight-line) distance. \\ Here $\bx_{2}$ is the nearest neighbour to $\bq$ and $\{ \bx_{1}, \bx_{2}, \bx_{4}, \bx_{7} \}$ are the $k=4$ exact nearest neighbours to $\bq$.}
+    \label{fig:nns-example}
+\end{figure}
 
 \subsubsection{Distance Metrics and Similarities}
 
 We will present similarity/distance measures used in this paper.
 
 \paragraph{Inner product distance}
-The inner product $\bx^\top \bq$ is strictly speaking a similarity measure rather than a distance metric, as it is maximised for nearby points and does not satisfy metric properties such as the triangle inequality~\cite{chen2009similarity}. However, for our purposes, this distinction is in-consequential. Keeping this in mind, to preserve consistency with the nearest neighbour formulation in Eq.~\ref{eq:nns_def}, we define the inner product distance $\dist_{IP}$ as a simple inverse of similarity:
+The inner product $\bx^\top \bq$ is strictly speaking a similarity measure rather than a distance metric, as it is maximised for nearby points and does not satisfy metric properties such as the triangle inequality~\cite{chen2009similarity}. However, for our purposes, this distinction is in-consequential. Keeping this in mind, to preserve consistency with the nearest neighbour formulation in Eq.~\ref{eq:nns_def}, we define the inner product distance $\distip$ as a simple inverse transform of similarity:
 
 \begin{equation}
-\dist_{IP}(\bx, \bq) = -\,\bx^\top \bq.
+\distip(\bx, \bq) = -\,\bx^\top \bq.
 \end{equation}
 
-Minimising $\dist_{IP}$ is therefore equivalent to maximising inner product similarity. Since this transformation preserves rankings, both objectives yield identical nearest neighbour results. Consequently, we treat maximising inner product similarity and minimising $\dist_{IP}$ as interchangeable throughout this paper.
+Minimising $\distip$ is therefore equivalent to maximising inner product similarity. Since this transformation preserves rankings, both objectives yield identical nearest neighbour results. Consequently, we treat maximising inner product similarity and minimising $\distip$ as interchangeable throughout this paper.
 
 \paragraph{Angular distance.}
 
-Angular distance is a distance metric measuring the angle $\theta_{\bx\by}$ between two points:
+This is a distance metric measuring the angle $\theta_{\bx\by}$ between two points:
 
 \begin{equation}
     \theta_{\bx \by} = \arccos\!\left(\frac{\dotxy}{\nbx \nby}\right).
@@ -219,15 +223,17 @@ Angular distance is a distance metric measuring the angle $\theta_{\bx\by}$ betw
 A useful property of angular distance is that its invariant under unit normalisation. Consequently, replacing vectors by $\hat{\bx}=\bx/\nbx$ does not alter pairwise angular distances or neighbour rankings. On the unit-sphere $\nbx=\nby=1$, so we can simplify Eq.~\ref{eq:angular-distance} to:
 
 \begin{equation}
-\theta_{\bx\by} = \arccos(\bx^\top\by).
+\theta_{\bx\by} = \arccos(\bx^\top\by) \quad \text{on the unit-sphere}
 \end{equation}
 
-Since $\arccos$ strictly decreases as $\bx^\top\by$ increases, maximising the inner product on the unit-sphere is equivalent to minimising the angular distance. This is a useful property we will use in this paper.
+Since $\arccos$ strictly decreases as $\bx^\top\by$ increases, maximising the inner product on the unit-sphere is equivalent to minimising the angular distance. This is a useful property we will take advantage of in this paper.
 
 \subsection{Locality Sensitive Hashing}
 \label{sec:lsh}
 
-Locality Sensitive Hashing (LSH) \cite{jafari2021survey} is a widely used approach for ANNS. It delivers guaranteed \emph{sub-linear} query time for the the $(c,r)$-approximate near neighbour problem (\crNN). For a radius $r$ and an approximation factor $c$, the \crNN problem asks to return any point $\bx$ within distance $cr$ to $\bq$ \emph{if} there exists a point $\bxs$ within distance $r$ to $\bq$ \cite{pham2022falconn++}, otherwise return nothing. Although \crNN isn't strictly the same problem as ANNS, it is often the case in literature to solve \crNN as a proxy for ANN, particularly when using LSH \cite{jafari2021survey,huang2015query}. Figure \ref{fig:lsh} shows how LSH could be used for $k$ANNS. With this being said, we can formally define LSH using Def.~\ref{def:LSH}.
+\alert{This section could use a figure to demonstrate these ideas}
+
+Locality Sensitive Hashing (LSH) \cite{jafari2021survey} is a widely used approach for ANNS. It delivers guaranteed \emph{sub-linear} query time for the the $(c,r)$-approximate near neighbour problem (\crNN). For a radius $r$ and an approximation factor $c$, the \crNN problem asks to return any point $\bx$ within distance $cr$ to $\bq$ \emph{if} there exists a point $\bxs$ within distance $r$ to $\bq$ \cite{pham2022falconn++}, otherwise return nothing. Although \crNN isn't strictly the same problem as ANNS, it is often the case in literature to create methods based on solving \crNN, and then apply them to the $k$ANNS problem. With this being said, we can formally define LSH in-terms of \crNN using Def.~\ref{def:LSH}.
 
 \begin{definition}[LSH]
     \label{def:LSH}
@@ -238,6 +244,8 @@ Locality Sensitive Hashing (LSH) \cite{jafari2021survey} is a widely used approa
 		\item If $\dist(\by, \bq) \geq cr$, then  $\Pr{h(\by)=h(\bq)} \leq p_2$ .
 	\end{itemize}
 \end{definition}
+
+For disambiguation, a pair of points $\bx, \by$ are \emph{close} if $\dist(\bx, \by) \leq r$, and likewise \emph{far} if $\dist(\by, \by) \geq cr$.
 
 % \paragraph{Concanation}    
 
@@ -252,11 +260,14 @@ Locality Sensitive Hashing (LSH) \cite{jafari2021survey} is a widely used approa
 % If using Simhash, $L = n^{1/c}$
 % If using Falconn, $L = n^{1/c^2}$
 
-\paragraph{Hashing mechanism.}
-For a given hash function $h$ and point $\bx$, $h(\bx)$ is called the \emph{hash value} of $\bx$ under $h$. A hash \emph{collision} between two points occurs when they share the same hash value. Given a query point $\bq$, a collision with a point $\bx$ is called a \emph{true collision} if $\dist(\bx,\bq) \le r$, and a \emph{false collision} if $\dist(\bx,\bq) \ge cr$. 
-The central driving property of a locality-sensitive hash (LSH) function is that true collisions occur with higher probability than false collisions. This property motivates the use of LSH to construct searchable indices for ANNS.
+\paragraph{Introduction to hashing.}
 
-To this end, consider an LSH function $h$ with $D$ distinct outputs. These outputs can thus be assigned unique labels in $[D]$, i.e.\ $h : \Rd \rightarrow [D]$. Applying $h$ to each point $\bx \in X$ assigns it a label $i = h(\bx)$. Points with the same label are grouped into sets called \emph{hash buckets}. We say that a point $\bx$ is \emph{hashed} to bucket labelled $\mB_i$ if $h(\bx) = i$. The collection of the $D$ buckets induced by $h$ is collectively called a \emph{hash table} $\mT$ (see Eq.~\ref{eq:lsh_tab}). By the definition of LSH, these buckets are more likely to contain pairs of close points than far points, and the hash table may therefore be interpreted as a coarse partitioning of $X$ based on proximity measured by $\dist$.
+We introduce the idea of \emph{hashing} as applying a hash function $h$ to any point $\bx$. We call $h(\bx)$ as the \emph{hash-value} of $\bx$ using $h$. A hash \emph{collision} between two points occurs when they share the same hash value. In terms of \crNN, given a query point $\bq$, a collision with a point $\bx$ is called a \emph{true collision} if $\dist(\bx,\bq) \le r$, and a \emph{false collision} if $\dist(\bx,\bq) \ge cr$. 
+The central driving property of an LSH hash function is that true collisions occur with higher probability than false collisions. This property motivates the use of LSH to construct searchable indices for \crNN.
+
+\paragraph{Constructing an LSH table.}
+
+Consider an LSH function $h$ with $D$ distinct outputs. These outputs can thus be assigned unique labels in $[D]$, i.e.\ $h : \Rd \rightarrow [D]$. Given a dataset $X$, applying $h$ to each point $\bx \in X$ assigns them a label $i = h(\bx)$. We can then group points with the same label into sets called \emph{hash buckets}. We say that a point $\bx$ is \emph{hashed} to bucket labelled $\mB_i$ \textit{if} $h(\bx) = i$. The collection of the $D$ buckets induced by $h$ is collectively called a \emph{hash table} $\mT$ (see Eq.~\ref{eq:lsh_tab}). By the definition of LSH, these buckets are more likely to contain pairs of close points than far points, and a hash table may therefore be interpreted as a coarse partitioning of $X$ based on proximity measured by $\dist$.
 
 \begin{equation}
 \label{eq:lsh_tab}
@@ -266,7 +277,9 @@ To this end, consider an LSH function $h$ with $D$ distinct outputs. These outpu
 \end{aligned}
 \end{equation}
 
-\paragraph{A practical LSH approach:} A naive approach to use an LSH based ANNS method would be to construct a just one hash table using one hash function. This however, has several drawbacks. Firstly, there is a non-trivial bounding probability $p_2$ that the hash function creates false collisions. To mitigate this issue, a typical approach is to \emph{concatenate} $l$ independent LSH hash functions together into a combined hash function $g$, where:
+\paragraph{A practical LSH approach.}
+
+A naive approach to use LSH so solve \crNN would be to construct just one hash table using one hash function. Given a query $\bq$, one would return points in the bucket associated with $h(\bq)$ as within $cr$ distance to $q$. This however, has several drawbacks. Firstly, there is a non-trivial bounding probability $p_2$ that the hash function creates false collisions. To mitigate this issue, a typical approach is to \emph{concatenate} $l$ independent LSH hash functions together into a combined hash function $g$, where:
 
 \begin{equation}
     \label{eq:lsh-concat}
@@ -275,41 +288,41 @@ To this end, consider an LSH function $h$ with $D$ distinct outputs. These outpu
     \end{aligned}
 \end{equation}
 
-Two points $\bx$ and $\bq$ only collide when they have identical hashes across $h_1, h_2, \dots, h_l$. Since there are $D$ unique outputs for a given $h_i$, $g(\bx)$ effectively creates a choice of $D^l$ buckets that a point can be assigned to. This then bounds the chance of a false collisions by $p^l_2$. However, concatenating hash functions also \emph{decreases} the chance of a true collision to $p^l_1$. To address this issue, combine $L$ hash tables, each with a concatenated hash function $g_i$, for $i \in [L]$. For two points to collide, they have to have the same hash value on just one hash table. 
-
-Using $L$ tables decreases the probability of missing a true collision from $1-p^l_1$ to $(1-p^l_1)^L$. Thus the probability of a true hash collision across $L$ tables \emph{increases} to $1-(1-p^l_1)^L \approx 1 - e^{- L \cdot p^l_1} $.
+Two points $\bx$ and $\bq$ only collide when they have identical hashes across $h_1, h_2, \dots, h_l$. Since there are $D$ unique outputs for a given $h_i$, $g(\bx)$ effectively creates a choice of $D^l$ buckets that a point can be assigned to. This then decreases the chance of a false collisions to $p^l_2$. By symmetry, this also \emph{decreases} the chance of a true collision to $p^l_1$. To address this issue, we combine $L$ hash tables, each with a concatenated hash function $g_i$, for $i \in [L]$. For two points to collide, they have to have the same hash value on just one hash table. This approach decreases the probability of missing a true collision from $1-p^l_1$ to $(1-p^l_1)^L$. Thus the probability of a true hash collision across $L$ tables \emph{increases} to $1-(1-p^l_1)^L \approx 1 - e^{- L \cdot p^l_1} $.
 
 % Assume $p_2$ and $l$ are chosen such that there is a negligible chance of a false hash collision per table.
 
 % To ensure a constant probability of a false collision, set $p^l_2 = 1/n$.
 
 \paragraph{LSH parameter setting.}
-With these choices in mind, to obtain a practical \crNN solver that finds a close point within radius $cr$ to the query $\bq$ if there exists a point within radius $r$ to $\bq$, we first select $p_2$ and $l$ such that the probability of a false hash collision per table is negligible. Concretely, we set $p_2^l = 1/n$, which yields $l = \ln n / \ln(1/p_2)$. Since $l$ grows logarithmically with $n$, the single-table true collision probability, $p_1^l$, decreases as $n$ increases. To account for this effect, set $L = O(1/p_1^l)$. The probability of a true hash collision is then:
+With these choices in mind, to obtain a practical \crNN solver, we first select $p_2$ and $l$ such that the probability of a false hash collision per table is negligible. Concretely, we set $p_2^l = 1/n$, which yields $l = \ln n / \ln(1/p_2)$. Since $l$ grows logarithmically with $n$, the single-table true collision probability, $p_1^l$, decreases as $n$ increases. To account for this effect, set $L = O(1/p_1^l)$. The probability of a true hash collision is then:
 
 \[
 1-(1-p^l_1)^L \approx 1 - e^{- L \cdot p^l_1} = 1 - e^{-1}
 \]
 
-This ensures a constant, non-vanishing probability of a true hash collision across $L$ tables for any $n$. Introducing the exponent $\rho = \ln(p_1)/\ln(p_2)$, this yields an LSH index with $L = O(1/p_1^l) = \bigO(n^\rho)$ tables. To find a close point with constant probability thus requires sub-linear $\bigO(n^\rho)$ distance computations. 
+This ensures a constant, non-vanishing probability of a true hash collision across $L$ tables for any $n$. Introducing the exponent $\rho = \ln(p_1)/\ln(p_2) < 1$, this yields an LSH index with $L = O(1/p_1^l) = \bigO(n^\rho)$ tables. To find a close point with constant probability thus requires sub-linear $\bigO(n^\rho)$ distance computations. Additionally, as each table contains $n$ points, the total space complexity of the LSH index excluding the dataset is $\bigO(nL) = \bigO(n/p_1^l)$.
 
-Minimising the factor $\rho$ is a deciding factor on the practicality of an LSH \crNN method, and hence the $k$ANNS - it dictates the complexity of the indexing space and the necessary number of distance computations (often a dominating factor in the speed of query processing). The LSH family used by a particular family naturally have different collision probabilities $(p_1,p_2)$ for given $(c,r)$, and therefore lead to different values of $\rho$. Accordingly, different \crNN methods have varying indexing and querying complexities, which impact their practical applicability.
+\paragraph{Role of the LSH exponent.}
 
-\begin{figure}
-    \centering
-    \includegraphics[width=0.8\linewidth]{figs/diags/lsh.png}
-    \caption{A simplified example of an LSH hash table for $kANNS$. This uses one hash function creating $D=5$ buckets. If the query $\bq$ hashes to the bucket $\mB_{4}$, then its true $k=2$ nearest neighbours shaded in blue will be found.}
-    \label{fig:lsh}
-\end{figure}
+The aforementioned approach of concatenating $l$ hash functions across $L$ tables is a common pattern to create a practical LSH \crNN solver. Consequently, as $\rho$ dictates the indexing space and query complexity, it is central to deciding the practicality of an LSH \crNN method. Naturally, the chosen hash families underpinning a particular LSH method have different collision probabilities $(p_1, p_2)$. Accordingly, this leads to varying $\rho$ values, which impact their real-world applicability.
+
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=0.8\linewidth]{figs/diags/lsh.png}
+%     \caption{A simplified example of using an LSH hash table for $k$ANNS. This table uses one hash function to create $D=5$ buckets. If the query $\bq$ hashes to the bucket $\mB_{4}$, then its true $k=2$ nearest neighbours shaded in blue will be found.}
+%     \label{fig:lsh}
+% \end{figure}
 
 \subsection{LSH families for angular distance}
 
-This section studies the values of $\rho$ of common LSH families for angular distance for the \crNN problem, including SimHash~\cite{charikar2002similarity} and Falconn~\cite{andoni2015practicaloptimallshangular}. We can define the cosine similarity between $\bx$ and $\by$ in-terms of angular distance from Eq.~\ref{eq:angular-distance} as:
+This section studies the values of $\rho$ of common LSH families for angular distance for the \crNN problem, including SimHash~\cite{charikar2002similarity} and Falconn~\cite{andoni2015practicaloptimallshangular}. To this end, we can define the cosine similarity between $\bx$ and $\by$ in-terms of angular distance from Eq.~\ref{eq:angular-distance} as:
 
 \begin{equation}
     \cosim(\bx, \by) = \cos(\theta_{\bx \by}) = \frac{\bx^\top \by}{\nbx \nby}
 \end{equation}
 
-Maximising cosine similarity is thus equivalent to minimising angular distance. For ease of notation when deriving different $\rho$, we can embed Euclidean distance on the unit sphere into cosine similarity. Thus minimising Euclidean distance on the unit-sphere is shown to be equivalent to minimising angular distance. To illustrate, take $\bx, \by \in \Rd$, with $\|\bx\|=\|\by\|=1$. Using the inner product expansion of Euclidean distance we can write:
+Consequently, maximising cosine similarity is equivalent to minimising angular distance. For ease of notation when studying different $\rho$, we can \emph{embed} Euclidean distance on the unit sphere into cosine similarity. Thus we will demonstrate that minimising Euclidean distance on the unit-sphere is accordingly equivalent to minimising angular distance. To illustrate, take $\bx, \by \in \Rd$, with $\|\bx\|=\|\by\|=1$. Using the inner product expansion of Euclidean distance we can write:
 
 \begin{equation}
     \|\bx-\by\|^2 = \|\bx\|^2 + \|\by\|^2 - 2 \dotxy = 2 - 2\dotxy
@@ -333,7 +346,7 @@ Hence we can embed the Euclidean distance between $\bx$ and $\by$ using:
     \cosim(\bx, \by) = 1 - \frac{\|\bx-\by\|^2}{2}.
 \end{equation}
 
-Consequently, minimising Euclidean distance on the unit-sphere is equivalent to maximising cosine similarity. Thus, the study of $\rho$ is equivalent in both regimes. For the \crNN problem, we can then derive the following expressions of equivalence between Euclidean distance and cosine similarity for close and far vectors. 
+Consequently, minimising Euclidean distance on the unit-sphere is equivalent to maximising cosine similarity. Ergo, the study of $\rho$ is equivalent in both regimes. For the \crNN problem, we can then derive the following expressions of equivalence between Euclidean distance and cosine similarity for close and far vectors. 
 
 \begin{equation}
     \label{eq:lsh-t1}
@@ -358,7 +371,7 @@ We will briefly introduce SimHash's hashing mechanism \cite{charikar2002similari
 h_a(\bx) = \operatorname{sign}( \bx^\top \br_a).
 \]
 
-\paragraph{Collision Probability.}  For $\bx, \by \in \mSd$, we denote their angular distance as $\theta_{\bx \by}$. The collision probability between $\bx$ and $\by$ depends only on $\theta_{\bx \by}$. Consequently, we can re-express this using cosine similarity.
+\paragraph{Collision Probability.}  For $\bx, \by \in \mSd$, we denote their angular distance as $\theta_{\bx \by}$. The collision probability between $\bx$ and $\by$ depends only on $\theta_{\bx \by}$. Consequently, we can re-express this using cosine similarity:
 
 \[
 \Pr{h_a(\bx)=h_a(\by)}
@@ -413,15 +426,15 @@ We can then derive approximate forms of $p_1$ and $p_2$, hence derive $\rho_{SH}
 \[
 p_1 = 1 - \frac{r}{\pi} + \bigO(r^3),
 \qquad
-p_2 = 1 - \frac{cr}{\pi} + \bigO(r^3).
+p_2 = 1 - \frac{cr}{\pi} + \bigO(r^3)
 \]
 
 Using
 \[
-\log\!\left(\frac{1}{1-\varepsilon}\right)=\varepsilon+O(\varepsilon^2),
+\log\!\left(\frac{1}{1-\varepsilon}\right)=\varepsilon+O(\varepsilon^2)
 \]
-we get
 
+We get:
 \[
 \rho_{SH}
 =
@@ -448,7 +461,7 @@ Given this derivation of $\rho_{SH}$, we can present the following thereom:
 \subsubsection{Falconn}
 \label{sec:falconn}
 
-Falconn \cite{andoni2015practical} is similar in spirit to SimHash - it relies on projections onto Gaussian random vectors; however, its hashing construction differs fundamentally, leading to distinct theoretical guarantees. As with the preceding discussion of SimHash, we first outline the hashing mechanism, then examine the associated collision probabilities, and finally derive the exponent $\rho$.
+Falconn was first introduced by Andoni et al. \cite{andoni2015practical}. It is similar in spirit to SimHash, insofar as it relies on projections onto Gaussian random vectors; however, its hashing construction differs fundamentally, leading to distinct theoretical guarantees. As with the preceding discussion of SimHash, we first outline the hashing mechanism, then examine the associated collision probabilities, and finally derive the exponent $\rho$.
 
 \paragraph{Hash function.}
 Consider a set of $D$ random vectors $\br_i$ with entries sampled from $\mN(0, 1)$, and
@@ -465,11 +478,11 @@ In particular, The hash value of $\bx$ is defined in Eq.~\ref{eq:falconnhash}. C
     \end{cases}
 \end{equation}
 
-\paragraph{Collision Probability.} The collision probability depends on the angle $\theta_{\bx \by}$ between $\bx$ and $\by$. Andoni et al.~\cite{andoni2015practical} shows the collision probability for a cosine similarity value $sim(\bx, \by) = t$:
+\paragraph{Collision Probability.} Following a lengthy derivation using the collision probability presented by Andoni et al.~\cite{andoni2015practical}, we can re-express this in-terms of the cosine similarity between two points $sim(\bx, \by) = t$.
 
 \[
 \Pr{h(\bx)=h(\by)}
-=
+\approx
 D^{-(1-t)/(1+t)}
 \quad \text{as } D \to \infty.
 \]
@@ -477,9 +490,9 @@ D^{-(1-t)/(1+t)}
 Using the thresholds $t_1$ and $t_2$ for close and far points in Eqs.\ref{eq:lsh-t1} and \ref{eq:lsh-t2}, we can derive $p_1$ and $p_2$ as in-terms of Euclidean distance:
 
 \[
-p_1 = D^{-r^2/(4-r^2)},
+p_1 \approx D^{-r^2/(4-r^2)},
 \qquad
-p_2 = D^{-c^2 r^2/(4-c^2 r^2)}.
+p_2 \approx D^{-c^2 r^2/(4-c^2 r^2)}.
 \]
 
 \paragraph{Small distance regime ($r\to0$).} Using a Maclaurin expansion of $x$ where $x = r^2/4$. As $r$ vanishes, we can derive an exponent $\rho$: 
@@ -499,21 +512,21 @@ p_2 = D^{-c^2 r^2/(4-c^2 r^2)}.
 \[
 \rho
 =
-\frac{\log(1/p_1)}{\log(1/p_2)} = 
+\frac{\log(1/p_1)}{\log(1/p_2)} \approx 
 \frac{r^2/4 + O(r^4)}{c^2 r^2/4 + O(r^4)}
-=
+= 
 \frac{1}{c^2}+O(r^2).
 \]
 
 \medskip
 
-Given this derivation of $\rho$, we can present the following thereom:
+Given this value of $\rho$, Andoni et al. show that it is asymptotically optimal, consequently we can present the following theorem:
 
 \begin{theorem}[LSH Exponent of Falconn]
-For Euclidean \crNN on the unit sphere and equivalently for angular distance, Falconn has a exponent $\rho$ satisfying:
+For \crNN with a small $c$ using angular distance, Falconn has a asymptotically optimal exponent $\rho$ satisfying:
 
 \[
-\rho \approx \frac{1}{c^2} \quad\text{as } r\to0.
+\rho \approx \frac{1}{c^2} \quad\text{as } r \to 0 \quad \text{and} \quad D \to \infty
 \]
 
 \end{theorem}
@@ -525,14 +538,10 @@ For Euclidean \crNN on the unit sphere and equivalently for angular distance, Fa
     \label{fig:falconnhash}
 \end{figure}
 
-We note that $\rho = 1/c^2$ is optimal among all possible LSH families~\cite{andoni2008near} on Euclidean distances.
-This explains the practical improvement of Falconn over SimHash on $k$ANNS with cosine similarity~\cite{andoni2015practical}. 
-
-
-\subsection{Locality Sensitive Filtering}
+\subsection{Locality Sensitive Filtring}
 \label{sec:lsf}
 
-Locality Sensitive Filtering \cite{becker2016new} (LSF) is extension of LSH whereby points must pass a filtering condition(s) before being added to a bucket. These filtering conditions are based on proximity - in essence, close point pairs are more likely to remain in a bucket than far points. For the purposes of ANNS, an LSF filter can be added to an LSH index to create an \emph{LSF index}. Since far points are more likely to be filtered from a bucket, less points are necessarily stored in the index - reducing the indexing space. Querying speed is also improved, since buckets contain more close points, reducing the number of necessary nearest neighbour candidates for each query \cite{pham2022falconn++}. A formal definition of an LSF filter is given in Eq.~\ref{def:LSF} 
+Locality Sensitive Filtering \cite{becker2016new} (LSF) is an extension of LSH whereby points must pass a filtering condition before being added to a bucket. These filtering conditions are based on proximity - in essence, close point pairs are more likely to remain in a bucket than far points. For the purposes of ANNS, an LSF filter can be added to an LSH index to create an \emph{LSF index}. Since far points are more likely to be filtered from a bucket, less points are necessarily stored in the index - reducing the indexing space. Querying speed is also improved, since buckets contain more close points, reducing the number of necessary nearest neighbour candidates for each query \cite{pham2022falconn++}. With that being said, we can formally define an LSF filter using Defn.~\ref{def:LSF}:
 
 \begin{definition}[LSF]\label{def:LSF}
 	For a distance function $\dist$ positive reals $r$, $c$, $q_1$, $q_2$, and $0 < q_2 < q_1 \leq 1$, $c > 1$, given $\bx, \by$ in the bucket $h(\bq)$ where $h$ is randomly chosen from a LSH family, an LSF mechanism is a filter that has the following properties:
@@ -543,7 +552,7 @@ Locality Sensitive Filtering \cite{becker2016new} (LSF) is extension of LSH wher
 	\end{itemize}
 \end{definition}
 
-The addition of an LSF filter to an LSH table creates new collision probabilities between close and far points. Formally, for $\bx$ close to $\bq$ and $\by$ far from $\bq$, the resulting collision probabilities satisfy:
+The addition of an LSF filter to an LSH table creates new collision probabilities between close and far points. Assume the filter is added to an LSH index with collision probabilities $p_1, p_2$ (before or after hash concatenation), then the \emph{new} collision probabilities satisfy:
 
 \begin{equation}
     \Pr{h(\bx)=h(\bq),\ \bx \text{ is not filtered}} \ge q_1 p_1,
@@ -551,9 +560,11 @@ The addition of an LSF filter to an LSH table creates new collision probabilitie
     \Pr{h(\by)=h(\bq),\ \by \text{ is not filtered}} \le q_2 p_2 .
 \end{equation}
 
-Relative to the original LSH scheme, the collision probability of a close point is reduced from $p_1$ to $q_1 p_1$ while that of far awap points is also reduced from $p_2$ to $q_2 p_2$. Consequently, to maintain a constant success probability, the number of hash tables must be increased to $L = \bigO(1/{q_1 p_1})$, which is larger than the $\bigO(1/p_1)$ tables required by the underlying LSH construction. However, in real world datasets, close pairs are far less frequent than far pairs. Consequently, the expected number of retained points per table is well below $n q_1$, meaning that despite an increase in $L$, the total index size of an LSF construction is often smaller than that of an equivalent LSH index.
+\paragraph{Indexing space.}
 
-Now assume an LSF filter is added to an LSH index with exponent $\rho$, satisfying:
+Relative to the original LSH scheme, the collision probability of a close point is reduced from $p_1$ to $q_1 p_1$ while that of far awap points is also reduced from $p_2$ to $q_2 p_2$. Consequently, to maintain a constant success probability, the number of hash tables must be increased to $L = \bigO(1/{q_1 p_1})$, which is larger than the $\bigO(1/p_1)$ tables required by the underlying LSH construction. However, in real world datasets, close pairs are far less frequent than far pairs. Consequently, the expected number of retained points per table is well below $n q_1$, meaning that despite an increase in $L$, the total index size of an LSF construction is often smaller than $\bigO(nq_1/q_1p_1) = \bigO(n/p_1)$. Meaning than the LSF index has superior indexing space complexity than the underlying LSH index. 
+
+\paragraph{Querying speed.} Now assume an LSF filter is added to an LSH index with exponent $\rho$, satisfying:
 
 \begin{equation}
     \label{eq:lsf-condition}
@@ -562,11 +573,11 @@ Now assume an LSF filter is added to an LSH index with exponent $\rho$, satisfyi
     \end{aligned}
 \end{equation}
 
-The LSF index then yields a new exponent $\rho' \le \rho$. As a result, solving \crNN requires only $\bigO(n^{\rho'})$ distance computations, yielding asymptotically faster queries. Together, the reduced bucket occupancy and improved exponent allows the LSF index a reduced index space complexity and faster query time than the original LSH index. Consequently, a key goal of practically applying creating an LSF index to construct a filter where $q_1, q_2$ satisfy Eq.~\ref{eq:lsf-condition} - this motivates the introduction of \fpp
+It can be shown the LSF index then yields a new exponent $\rho' \le \rho$. As a result, solving \crNN requires only $\bigO(n^{\rho'})$ distance computations, yielding asymptotically faster queries. Together, the reduced bucket occupancy and improved exponent allows the LSF index a reduced index space complexity and faster query time than the original LSH index. Consequently, a key goal of practically creating an LSF index is to construct a filter where $q_1, q_2$ satisfy Eq.~\ref{eq:lsf-condition} - this motivates the introduction of \fpp
 
 \subsection{\fpp}
 
-\fpp~\cite{pham2022falconn++} extends Falconn (Sec.~\ref{sec:falconn}) by incorporating an LSF filter. By utilising this filter, \fpp is enabled a smaller $\rho'$ exponent than Falconn, in practice, it outperforms Falconn in both indexing and querying. This section will focus on the theoretical underpinning of \fpp, in practice, however \fpp is implemented with heuristics inspired by this theory as detailed in Sec.~\ref{sec:fpp-in-practice}.
+\fpp~\cite{pham2022falconn++} extends Falconn by incorporating an LSF filter. By utilising this filter, \fpp is enabled a smaller $\rho'$ exponent than Falconn for angular distance, in practice, it outperforms Falconn in both indexing and querying. This section will focus on the theoretical underpinning of \fpp, in practice, however \fpp is implemented with heuristics inspired by this theory as detailed in Sec.~\ref{sec:fpp-in-practice}.
 
 \subsubsection{CEOs}
 \label{sec:ceos}
@@ -580,42 +591,39 @@ Concomitant of Extreme Order Statistics (CEOs) is a ANNS technique introduced by
 	\end{align}	
 \end{lemma} 
 
-Lemma \ref{lm:CEOs} indicates that accounting for $\sgn(\dotqr)$ and $\sqrt{2 \ln(D)}$, in expectation we can use $\br_a$ as a \emph{proxy} of $\bq$ to approximate inner product ordering of $\bq$ and points in $X$. This property \emph{also} holds for the top-$s$ random vectors with the largest $|\dotqr_i|$. This further justifies the multi-probing strategy of \fpp that considers points that are in the buckets associated to the top-$\qp$ random vectors closest to $\bq$.
+Lemma \ref{lm:CEOs} indicates that accounting for $\sgn(\dotqr)$ and $\sqrt{2 \ln(D)}$, in expectation we can use $\br_a$ as a \emph{proxy} of $\bq$ to approximate inner product ordering of $\bq$ and points in $X$. This property \emph{also} holds for the top-$s$ random vectors with the largest $|\dotqr_i|$. 
 
-One may notice that both CEOs and Falconn rely on the maximum absolute projection of a query with a set of $D$ random vectors. This connection motivates the usage of CEOs to add a filtering mechanism to Falconn. Essentially, if a query $\bq$ hashes to a bucket associated to the random vector $\br_a$, for a large enough $D$, for any $\bx$ in this bucket, the ordering of $\bx ^\top \br_a$ in expectation matches the ordering of the inner product of these points with $\bq$.
-This property inspires the LSF mechanism implemented by \fpp.
+One may notice that both CEOs and Falconn rely on the maximum absolute projection of a query with an identically distributed set of $D$ random vectors. This connection motivates the usage of CEOs to add a filtering mechanism to Falconn. Essentially, if a query $\bq$ hashes to a bucket associated to the random vector $\br_a$, for a large enough $D$, for any $\bx$ in this bucket, the ordering of $\bx ^\top \br_a$ in expectation matches the ordering of the inner product of these points with $\bq$. This property inspires the LSF mechanism underpinning \fpp.
 
 % \alert{Maybe mention more about the theory - like the mean of the projections with CEOs is proportional to the inner product with... hard to explain - look at the mean component in the CEOs section from the Falconn++ paper.}
 % \alert{Fixed}
 
 \subsubsection{CEOs based LSF}
+\label{sec:ceos-lsf}
 
-As hinted, the CEOs property can be leveraged to add an LSF filter to the existing Falconn algorithm. To this end, \fpp~\cite{pham2022falconn++}  uses a filter that keeps points in a bucket if they have a score that exceeds a threshold $t=(1-r^2/2){\sqrt{2\ln D}}$. Through a series of derivations, this yields $q_1 = 1/2$, and $q_2$ given by:
+As hinted, the CEOs property can be leveraged to add an LSF filter to the existing Falconn algorithm. To this end, consider a filter that keeps points in a bucket if they have a score that exceeds a threshold $t=(1-r^2/2){\sqrt{2\ln D}}$. Pham et al. show that through a series of derivations, this yields $q_1 = 1/2$, and $q_2$ given by:
 
 \[
 q_2
 =
 \frac{1}{\gamma \sqrt{2\pi}}
 \exp\!\left(-\frac{\gamma^2}{2}\right),
-\qquad
+\quad
 \text{where} \quad \gamma
 =
 \frac{cr\left(1-\frac{1}{c^2}\right)}{\sqrt{4-c^2r^2}}
 \cdot \sqrt{2\ln D}
 \]
 
-Given a sufficiently large $D$, $q_2$ can be made arbitrarily small. Consequently this can make $\ln(1/q_1)/\ln(1/q_2) < \rho$ for $\rho$. If this filter is added to Falconn with $\rho = 1/c^2$ for small $c$, this gives a value of $\rho'$ given by:
+Given a sufficiently large $D$, $q_2$ can be made arbitrarily small. Consequently, added to an LSH index this can make $\ln(1/q_1)/\ln(1/q_2) < \rho$. Assuming this filter is added to Falconn with $\rho \approx  1/c^2$ this gives a value of $\rho'$ given by:
 
 \begin{equation}
     \begin{aligned}
-        \rho'\approx 1/(2c^2 - 2 + 1/c^2) \leq 1/c^2
+        \rho'\approx 1/(2c^2 - 2 + 1/c^2) \leq 1/c^2 \approx \rho
     \end{aligned}
 \end{equation}
 
-Consequently, since $\rho' < \rho$, this LSF filter would create a more practical ANNS solver than Falconn. 
-It is worth noting that the smaller $\rho'$ comes with the cost of larger indexing size as \fpp has to use $L = O(1/p_1q_1)$ tables. However, in practice, \fpp returns better querying performance than Falconn using the same number of tables $L$ and hence similar memory footprints.
-
-It is important to note, that this value of $\rho'$ also makes a more practical ANNS solver than other rival angular LSH algorithms. For example SimHash (Sec.\ref{sec:simhash}), has an exponent $\rho_{SH} \approx 1/c \geq \rho'$. 
+Consequently, since $\rho' \leq \rho$, this LSF filter would create a more practical ANNS solver than Falconn. It is important to note, that this value of $\rho'$ also makes a more practical ANNS solver than other rival angular LSH algorithms. For example, we showed that SimHash has an exponent $\rho_{SH} \approx 1/c \geq \rho'$ (Sec.~\ref{sec:simhash}). 
 
 % \alert{Do we need a proper discussion here on the range of $r$ that this has to take, I'd rather leave out as a minor detail. There are the values of $r > \sqrt{2}$, and $r \approx \sqrt{2}$ that complicate things} 
 % \alert{No. There is no need for deep discussion here.}
@@ -623,7 +631,7 @@ It is important to note, that this value of $\rho'$ also makes a more practical 
 \subsection{\fpp in Practice}
 \label{sec:fpp-in-practice}
 
-For practical applications, \fpp is applied to solve the $k$ANNS problem. As noted in the previous section, the threshold LSF filter can make \fpp a more practical \crNN solver than Falconn. However, the authors of \fpp admit that this threshold filter is impractical, as $t$ is dependent on a single query, it would be difficult to find the optimal $t$ for a large batch of queries. Consequently, this inspires the creation of heuristic based filtering techniques that approximate the use of a threshold for each bucket. In addition to this, \fpp uses several other mechanisms to further increase its practicality. In keeping with this theme, we detail the practical implementation of \fpp with a focus on heuristics. 
+Although it is based on theory grounded in \crNN, \fpp is practically applied to solve the $k$ANNS problem. As noted in the previous section, the threshold LSF filter can make \fpp a more practical \crNN solver than Falconn. However, the authors of \fpp admit that this threshold filter is impractical, as $t$ is dependent on a single query, it would be difficult to find the optimal $t$ for a large batch of queries. Consequently, this inspires the creation of heuristic based filtering techniques that approximate the use of a threshold for each bucket. In addition to this, \fpp uses several other mechanisms to further increase its practicality. Pham et al. show that these additions allow \fpp to out-perform Falconn on practical $k$ANNS applications. In keeping with this theme, we detail the practical implementation of \fpp with a focus on heuristics.
 
 \subsubsection{Concatenation of Hash Functions}
 
@@ -631,17 +639,16 @@ Although \fpp can be defined using a single hash function per table, to reduce t
 
 Let $R, S \subset \Rd$  be two sets both containing $D$ random vectors with entries sampled from $\mN(0, 1)$. Each set can be used to define separate hash functions $h_1, h_2$ as described in Eq.~\ref{eq:falconnhash}. These can then be used to define the concatenated hash function $g(\bx) = (h_1(\bx), h_2(\bx))$. Since $h_1$ and $h_2$ each have $2D$ values, $g(\bx)$ effectively creates $(2D)^2 = 4D^2$ different buckets.
 
-The score of a point $\bx$ with respect to any of the $4D^2$ buckets defined by $g$ is obtained by summing its scores with respect to the two constituent signed directions. Concretely, since each bucket corresponds to a pair of signed directions $(\br, \bs) \in \widehat{R} \times \widehat{S}$ where $\widehat{R} = R \cup -R, \widehat{S} = S \cup -S$, the bucket score is given by Eq.~\ref{eq:fpp-concat}. As with a 2-layer hash table, this score mechanism decides the probing order for both indexing and querying.
+The score of a point $\bx$ with respect to any of the $4D^2$ buckets defined by $g$ is obtained by summing its scores with respect to the two constituent signed directions. Concretely, since each bucket corresponds to a pair of signed directions $(\br, \bs) \in \widehat{R} \times \widehat{S}$ where $\widehat{R} = R \cup -R, \widehat{S} = S \cup -S$, the bucket score w.r.t. $\bx$ is given by Eq.~\ref{eq:fpp-concat}.
 
 \begin{equation}
     \label{eq:fpp-concat}
     \begin{aligned}
-    score(\br, \bs)  = |\bx^\top \br| + |\bx^\top \bs|.
+    score_{\br, \bs}(\bx)  = |\bx^\top \br| + |\bx^\top \bs|.
     \end{aligned}
 \end{equation}
 
-In other words, among $4D^2$ random pairs $(\pm \br_i, \pm \bs_j)$, \fpp is using for the closest pair $(\br, \bs)$ to the query $\bq$ as its hash value.
-Furthermore, multi-probing strategies will also derived from this score for both indexing and querying phases as elaborated later.
+In other words, among $4D^2$ random pairs $(\pm \br_i, \pm \bs_j)$, \fpp finds the closest pair $(\br, \bs)$ to a point $\bx$. This score mechanism underpins Falconn\texttt{++}'s multi-probe strategies that will be explained below.
 
 \subsubsection{\fpp Indexing}
 
@@ -649,21 +656,28 @@ The indexing process of \fpp uses several key mechanisms on-top of the theoretic
 
 \paragraph{Multi-Probe Indexing.} 
 
-As is typical with LSH methods, points are hashed into each table using $h$ only \emph{once}. However, Pham et al.~ introduce index-time \emph{multi-probing}, where each point $\bx$ is added into multiple nearby buckets per table. This is motivated by similar reasoning to query time multi-probing \cite{lv2007multi}: because true LSH collisions are probabilistic, a query $\bq$'s true nearest neighbours may not collide in the top scoring bucket to $\bq$, but in nearby buckets. Consequently, it makes sense to search these nearby buckets for candidates also. If a nearest neighbour $\bx$ is then added to multiple nearby buckets, there is an increased chance of collision with $\bq$. \fpp implements index multi-probing by adding points to their nearest $iProbes$ buckets in each table as ranked by their score (see L4--5 in Algorithm 1). 
+As is typical with LSH methods, points are hashed into each table using $h$ only \emph{once}. However, Pham et al. introduce index-time \emph{multi-probing}, where each point $\bx$ is added into multiple nearby buckets per table. This is motivated by similar reasoning to query time multi-probing \cite{lv2007multi}: because true LSH collisions are probabilistic, a query $\bq$'s true nearest neighbours may not collide in the top scoring bucket to $\bq$, but in nearby buckets. Consequently, it makes sense to search these nearby buckets for candidates also. If a nearest neighbour $\bx$ is then added to multiple nearby buckets, there is an increased chance of collision with $\bq$. In practice, this is implemented by adding points to their nearest $iProbes$ buckets in each table as ranked by their score (see L4--5 in Algorithm 1). 
 
 \paragraph{Scale-based filtering.}
 
-In general, index multi-probing for LSH is generally avoided because it increase index memory complexity. If each point is added to its $\ip$ nearest buckets, then each table contains $\ip \cdot n$ points. However, given the filtering mechanic above, \fpp introduces a parameter $\alpha \in (0,1)$ to counter-act this effect. Using $\alpha$, each table would contain just $\alpha \cdot \ip \cdot n$ points. Consequently the \fpp filter makes multi-probing indexing feasible - a novel feature of \fpp compared to other LSH based algorithms.
+% In general, index multi-probing for LSH is generally avoided because it increase index memory complexity. If each point is added to its $\ip$ nearest buckets, then each table contains $\ip \cdot n$ points. However, by using LSF inspired bucket filtering, we can mitigate this increased indexing cost. To this end, \fpp introduces a parameter $\alpha \in (0,1)$ to counter-act this effect. 
 
-Consider a filter parametrised by a scaling parameter $\alpha \in (0,1)$. This keeps the top top-$(\alpha b)$ points with the largest score in a bucket with size $b$. Consequently, the number of points in a table is $\alpha n$. This can be seen as creating a unique threshold $t_i, i \in [2D]$ for each bucket. For example, a densely packed bucket would have an effective higher threshold than a sparse bucket containing fewer points. 
+% Consider a filter parametrised by a scaling parameter $\alpha \in (0,1)$. This keeps the top top-$(\alpha b)$ points with the largest score in a bucket with size $b$. Consequently, the number of points in a table is $\alpha n$. This can be seen as creating a unique threshold $t_i, i \in [2D]$ for each bucket. For example, a densely packed bucket would have an effective higher threshold than a sparse bucket containing fewer points. 
 
-\paragraph{Refining the filtering mechanism.} Pham et al. make two adjustments to the filtering mechanism discussed above. Firstly, to keep the number of points per table constant at $\alpha n$, and thus preserve indexing memory scalability, take the top-$\alpha b / \ip$ points per bucket by score. Additionally, to stop bucket size scaling from overly penalising small buckets containing points from sparse regions, enforce a minimum bucket size of $k$ points. This ensures that queries and points are more likely to collide when they are located in these sparse regions. Given these two considerations to multi-probe indexing and small buckets, a new filtering condition to take the top. 
+Pham et al. introduce a bucket filter inspired by the aforementioned threshold $t$ in Sec.~\ref{sec:ceos-lsf}. Consider a filter parametrised by a scaling parameter $\alpha \in (0,1)$. This keeps the top-$(\alpha b)$ points with the largest score in a bucket with size $b$. This can be seen as creating a unique threshold $t_i$ for each bucket. For example, a densely packed bucket would have an effective higher threshold than a sparse bucket containing fewer points. Without indexing multi-probing, this filter restricts the number or points per table to just $\alpha n$.
 
-\paragraph{Centring of dataset points} Before indexing, the centroid of $X$ is moved to the origin. Formally, find the centroid $\bx_c = \frac{1}{n}\sum_{i=1}^n\bx$. Then map each point with $\bx \mapsto \hat{\bx} = \bx - \bx_c$. Since $\bx_c$ is constant for all $\bx$, for any vector $\bq$, the ordering of $\bx^\top \bq$ is identical to $\hat{\bx}^\top \bq$. 
-This property is useful for both cosine and inner product similarity as it tends to redistribute the dataset more uniformly regarding the direction distribution, hence improving the hashing mechanism of \fpp.
-Though the centering trick will not preserve the 2-norm of $\bx_i$, by storing $\hat{\bx}$ and leveraging the property of CEOs in Eq. (19), the new hashing score $|\hat{\bx_i}^\top \br| + |\hat{\bx_i}^\top \bs|$ still preserves the inner product order between $\bx_i$ and $\bq$. 
-Therefore, the non-preserving 2-norm of centering trick does not affect the accuracy of the hashing mechanism.
-For some skewed datasets, the centroid of all points may be far from the origin. Since the $D$ Gaussian vectors are in expectation centred on the origin, this can lead to most points hashing to a small subset of buckets, thereby inhibiting the performance of \fpp. Pham et al.~ show that the addition of centering trick can induce better index quality, thereby improving querying performance. 
+\paragraph{Refining the filtering mechanism.} Pham et al. make two adjustments to the filtering mechanism discussed above. Firstly, to account for index multi-probing adding points $iProbes$ times per table, take the top-$\alpha b / \ip$ points per bucket by score. This reveals an another benefit of using $\alpha$ - it can be used to effectively counteract indexing memory space increases introduced by multi-probe indexing - a novel feature of \fpp compared to other LSH based algorithms. By accounting for the effect of $iProbes$, the number of points per table is kept constant at $\alpha n$.
+Additionally, to stop bucket size scaling from overly penalising small buckets containing points from sparse regions, enforce a minimum bucket size of $k$ points. This ensures that queries and points are more likely to collide when they are located in these sparse regions. Given these two considerations to multi-probe indexing and small buckets, the completed filter takes the top-$\max(k, \alpha b / iProbes)$ scoring points per bucket. 
+
+% to keep the number of points per table constant at $\alpha n$, and thus preserve indexing memory scalability, take the top-$\alpha b / \ip$ points per bucket by score. Additionally, to stop bucket size scaling from overly penalising small buckets containing points from sparse regions, enforce a minimum bucket size of $k$ points. This ensures that queries and points are more likely to collide when they are located in these sparse regions. Given these two considerations to multi-probe indexing and small buckets, a new filtering condition to take the top. 
+
+\newpage
+
+\paragraph{Centring of dataset points} 
+
+Before indexing, the centroid of $X$ is moved to the origin. Formally, find the centroid $\bx_c = \frac{1}{n}\sum_{i=1}^n\bx$. Then map each point with $\bx \mapsto \hat{\bx} = \bx - \bx_c$. Since $\bx_c$ is constant for all $\bx$, for any vector $\bq$, the ordering of $\bx^\top \bq$ is identical to $\hat{\bx}^\top \bq$. Note that although $\|\bx\| \ne 1$, the CEOs (Lemma.\ref{lm:CEOs}) still holds \cite{pham2021simple}.
+
+This trick is justified as follows: since the Gaussian vectors in $R$ and $S$ are approximately centred on the origin, this can become problematic for highly skewed datasets whose centroid lies far from the origin, potentially causing many points to hash into a small selection of buckets. Pham et al. demonstrably show that the addition of this heuristic improves the index quality and thus querying performance of Falconn based methods.
 
 \begin{algorithm}[H]
 	\caption{\fpp indexing}
@@ -671,13 +685,14 @@ For some skewed datasets, the centroid of all points may be far from the origin.
 	\begin{algorithmic}[1]
 		\Procedure{Multi-probe Indexing}{$X, \alpha, R, S, iProbes, L$}
 		\For{$i \gets 1$ \textbf{to} $L$}
+            \State Initialise a table $\mT_i$ containing $4D^2$ buckets
 			\For{\textbf{each} $\bx \in X$}
 				\State Compute top-$iProbes$ directions $(\br, \bs) \in \widehat{R} \times \widehat{S}$ such that $score(\br, \bs) = |\bx^\top \br| + |\bx^\top \bs|$ is largest.
 				\State Add $\bx$ into the top-$iProbes$ buckets corresponding to these directions
 			\EndFor
-			\For{\textbf{each} bucket $\mT_{i,j}$ of size $|\mT_{i,j}|$ in table $\mT_i$}
-				\State Keep points in $\mT_{i,j}$ with the top-$\max(k, \alpha |\mT_{i,j}| / \ip)$ scores.
-			\EndFor
+            \For{\textbf{each} bucket $\mB$ of size $b$ in $\mT_i$}
+                \State Keep points in $\mB$ with the top-$\max(k, \alpha b / \ip)$ scores.
+            \EndFor
 		\EndFor
 		\EndProcedure
 	\end{algorithmic}
@@ -685,14 +700,14 @@ For some skewed datasets, the centroid of all points may be far from the origin.
 
 \subsubsection{\fpp Querying}
 
-The querying stage of \fpp is comparatively simpler than indexing and resembles a typical LSH querying procedure. Like other LSH-based methods \cite{lv2007multi, andoni2015practical}, it employs multi-probe querying to increase the diversity and size of the candidate set. \fpp achieves this by leveraging the CEOs property (Sec.~\ref{sec:ceos}) to identify the $qProbes$ closest buckets across all $L$ repeats based on their score with $\bq$. The querying procedure then follows a common LSH strategy: identify nearby buckets, gather candidates, and re-rank them to return the top-$k$ approximate nearest neighbours. The pseudo-code for this procedure is provided in Alg.~\ref{alg:FalconnQuerying}.
+The querying stage of \fpp is comparatively simpler than indexing and resembles a typical LSH querying procedure for $k$ANNS. Like other LSH-based methods \cite{lv2007multi, andoni2015practical}, it employs multi-probe querying to increase the diversity and size of the candidate set. \fpp achieves this by leveraging the CEOs property (Sec.~\ref{sec:ceos}) to identify the $qProbes$ closest buckets across all $L$ repeats based on their score with $\bq$. The querying procedure then follows a common LSH strategy: identify nearby buckets, gather candidates, and re-rank them to return the top-$k$ approximate nearest neighbours. The pseudo-code for this procedure is provided in Alg.~\ref{alg:FalconnQuerying}.
 
 \begin{algorithm}[H]
 	\caption{\fpp querying}
 	\label{alg:FalconnQuerying} 									
 	\begin{algorithmic} [1]
 		\Procedure{Querying} {$\bq, X, R, S$}
-		\State Let $\mC$ be the intersection of the top-$qProbes$ buckets across all repeats corresponding to the largest absolute projection values $score(\br, \bs) = |\bq^\top \br| + |\bq^\top \bs|$ for $(\br, \bs) \in \widehat{R} \times \widehat{S}$
+		\State Let $\mC$ be the intersection of the top-$qProbes$ buckets across all repeats corresponding to the largest absolute projection values $score_{\br, \bs}(\bq) = |\bq^\top \br| + |\bq^\top \bs|$ for $(\br, \bs) \in \widehat{R} \times \widehat{S}$
         \State Return the top-$k$ points in $\mC$ with the largest values of $\dotqx$.
 		\normalsize
 		\EndProcedure
@@ -708,7 +723,7 @@ This section provides a summary of relevant GPU concepts necessary to understand
 
 \subsubsection{GPU Architecture}
 
-We briefly summarise key aspects of GPU architecture relevant to this work, specifically by focusing on its parallelised compute units and hierarchical memory structure. A graphical overview of these concepts is shown in Fig.~\ref{fig:gpu-arch}.
+We briefly summarise key aspects of GPU architecture relevant to this work, specifically by focusing on its parallelised compute units and hierarchical memory structure. A graphical overviewof these concepts is shown in Fig.~\ref{fig:gpu-arch}.
 
 \paragraph{GPU processors.}
 
@@ -980,7 +995,7 @@ The original \fpp was designed for angular distance, where similarity is maximis
 
 At a high level, \textit{CEOs} indexing consists of projecting dataset point onto a set of Gaussian random directions and storing the top-$m$ dataset points per projection direction. Querying follows an analogous pattern: the query is projected onto the same directions, the top-$s$ directions are selected, and a candidate set is formed from the union of the stored top-ranked points associated with these directions. A practical limitation of this approach is that achieving strong retrieval performance typically requires very large indices.
 
-\cf bears strong resemblance to this general strategy and may be viewed as a simplified variant. Instead of storing the global top-$m$ vectors for every projection direction, each direction retains only points for which it is among their top-$iProbes$ most significant directions. This modification substantially reduces indexing space,while preserving excellent querying performance. For example, to attain high query accuracy on the GIST dataset, \textit{CEOs} requires index sizes on the order of GBs, while \cf can achieve similar results with a few MBs (see Tab.~\ref{tab:gist-imagenet-indexing} in \hyperref[sec:experiment]{Experiment}). 
+\cf bears strong resemblance to this general strategy and may be viewed as a simplified variant. Instead of storing the global top-$m$ vectors for every projection direction, each direction retains only points for which it is among their top-$iProbes$ most significant directions. This modification substantially reduces indexing space,while preserving excellent querying performance. For example, to attain high query accuracy on the GIST dataset - excluding dataset size - \textit{CEOs} requires index sizes on the order of GBs \cite{pham2021simple}, while \cf can achieve similar results with a few MBs (see Tab.~\ref{tab:gist-imagenet-indexing} in \hyperref[sec:experiment]{Experiment}). 
 
 \section{Experiment}
 \label{sec:experiment}
