@@ -18,9 +18,10 @@
 \usepackage{placeins} 
 \usepackage[inkscapelatex=false]{svg}
 \usepackage{titlesec}
-
-
+\usepackage{etoolbox}
+\usepackage{setspace}
 \usepackage{easyReview}
+\usepackage{pdfpages}
 
 \newcommand{\Real}{\mathbb{R}}
 \newcommand{\Rd}{\mathbb{R}^d}
@@ -69,7 +70,6 @@
 \newcommand{\cf}{CuFalconn\xspace}
 \newcommand{\fpp}{Falconn\texttt{++}\xspace}
 \newcommand{\fgpu}{FAISS-GPU\xspace}
-\newcommand{\mfpp}{m\fpp\xspace}
 \newcommand{\glv}{GloVe-100\xspace}
 \newcommand{\imgnt}{ImageNet\xspace}
 \newcommand{\gist}{GIST\xspace}
@@ -123,6 +123,12 @@
 \linespread{1.06}
 % \setlength{\parskip}{0.3em}
 
+\makeatletter
+\renewcommand{\abstract}{%
+  \section*{\LARGE\abstractname}
+}
+\makeatother
+
 \geometry{
 	left=1in,    % Left margin
 	right=1in,   % Right margin
@@ -130,27 +136,61 @@
 	bottom=1in   % Bottom margin
 }
 
-\title{CuFalconn: GPU-accelerated Nearest Neighbour Search based on Locality Sensitive Filtering}
+\title{CuFalconn: GPU-accelerated Approximate Nearest Neighbour Search using Locality Sensitive Filtering}
 \author{   
     Hugo Phibbs \\
     hphi344@aucklanduni.ac.nz \\
     \small{Repository:} \small\url{https://github.com/HugoPhibbs/CUDA-CEOs}
 }
-\date{February 2026}
+% \date{February 2026}
 
 \begin{document}
 
-\maketitle
+\includepdf[pages=-]{consent-form.pdf}
+
+% \maketitle
+
+% \begin{titlingpage}
+%     \maketitle
+% \end{titlingpage}
+
+% \maketitle
+
+\begin{titlepage}
+    \centering
+
+    \vspace*{0.12\textheight}
+    {\Huge\bfseries
+    CuFalconn: GPU-accelerated Approximate Nearest Neighbour Search using Locality Sensitive Filtering\par}
+
+    \vspace*{0.18\textheight}
+    {\LARGE Hugo Phibbs\par}
+
+    \vspace*{0.18\textheight}
+    {\large
+    A thesis submitted in fulfilment of the requirements for the degree of
+    Master of Science in Computer Science, the University of Auckland, 2026.\par
+    \vspace{1em}
+    This thesis is for examination purposes only and is confidential to the examination process.\par
+    }
+
+    \vfill
+    {\small Repository: \small\url{https://github.com/HugoPhibbs/CUDA-CEOs}}
+\end{titlepage}
+
+\newpage 
 
 \begin{abstract}
 
-Nearest Neighbour Search (NNS) is a well-known problem in computer science. At its core, NNS finds the closest points in a dataset to a query point. However, when applied to large high-dimensional datasets, an \textit{exact} NNS is often unscalable and unnecessary. Consequently, an extensive body of research is dedicated to \textit{Approximate} NNS (ANNS) methods, which can sacrifice modest losses in accuracy for substantial gains in scalability. In this work, we introduce \cf, a GPU-accelerated ANNS algorithm that supports angular distance and inner-product similarity. \cf is based on locality-sensitive filtering (LSF), a modification of Locality Sensitive Hashing (LSH). The underlying method of \cf is primarily based on \fpp, a CPU-based ANNS algorithm; however, it introduces targeted adjustments to better align with GPU execution. Most notably, we replace Falconn\texttt{++}’s bucket size scaling parameter with a fixed maximum bucket size. Through extensive experiments on modern large-scale datasets, we demonstrate the indexing and querying performance of \cf. Additionally, \cf delivers substantial query speedups while maintaining competitive accuracy relative to competitor algorithms, including FAISS. 
+Nearest Neighbour Search (NNS) is a well-known problem in computer science. At its core, NNS finds the closest points in a dataset to a query point. However, when applied to large high-dimensional datasets, an \textit{exact} NNS is often unscalable and unnecessary. Consequently, an extensive body of research is dedicated to \textit{Approximate} NNS (ANNS) methods, which can sacrifice modest losses in accuracy for substantial gains in scalability. In this work, we introduce \cf, a GPU-accelerated ANNS algorithm that supports angular distance and inner-product similarity via Locality Sensitive Filtering. The underlying method of \cf is primarily based on \fpp, a CPU-based ANNS algorithm; however, it introduces targeted adjustments to better align with GPU execution. Most notably, we replace Falconn\texttt{++}’s bucket size scaling parameter with a fixed maximum bucket size. Through extensive experiments on modern large-scale datasets, we demonstrate the indexing and querying performance of \cf. Additionally, \cf delivers substantial query speedups while maintaining competitive accuracy relative to competitor algorithms, including FAISS. 
 
 \end{abstract}
 
 \newpage
 
+\begin{spacing}{0.95}
 \tableofcontents
+\end{spacing}
 
 \newpage
 
@@ -159,21 +199,14 @@ Nearest Neighbour Search (NNS) is a well-known problem in computer science. At i
 Nearest Neighbour Search (NNS) is a fundamental problem in computer science. It underpins a wide range of applications including deep learning \cite{dwibedi2021little,chakravarthy2023deep,raj2022estimation,archana2023novel}, data mining \cite{xu2022outlier,sun2022out,dang2021nearest}, recommender systems \cite{sarwar2001item,latifi2022sequential,meng2020pmd,chen2022approximate}, and cyber security \cite{gu2024hierarchical}. Put simply, for a dataset $X$ and a query $\bq$, NNS finds the closest point in $X$ to $\bq$ according to a distance metric $\dist$. A straightforward, naïve solution would be to perform an exhaustive brute force search over all points in $X$ to find the closest one to $\bq$. However, for a dataset size $n$ and dimension $d$, this approach has $\bigO(dn)$ time complexity. For datasets containing millions of points and large $d$, this complexity is prohibitively slow, even with high-performance hardware \cite{weber1998quantitative}. Crucially, in many real-world applications, finding the exact nearest neighbours to a query is unnecessary \cite{har2012approximate,halder2024enhancing}. Instead, returning nearest neighbours that are \textit{approximately} close to the query is typically sufficient. Consequently, a large body of research has focused on relaxing exact NNS to \emph{Approximate Nearest Neighbour Search} (ANNS) \cite{indyk1998approximate}, which trades a small loss in accuracy for substantial gains in query speed~\cite{aumuller2023recent}. 
 
 \\ 
-% \paragraph{Indexing and Querying.}
-
-% \paragraph{}
 
 Modern ANNS algorithms are typically divided into two separate stages: \emph{indexing} and \emph{querying}. Indexing creates a searchable data structure, called an index, of $ X$. Querying in turn uses this index to find the closest points in $X$ to $\bq$. Research into ANNS algorithms typically focuses on creating practical methods that are robust in both indexing and querying. In general, an index should be both fast to create and have a minimal memory footprint. Querying in turn should be quick while not overly sacrificing accuracy relative to the ground truth. The efficacy of indexing and querying is interlinked: fast, accurate querying relies on the structure and quality of an index.
 
-% \paragraph{Introduction to \fpp.}
+Locality Sensitive Hashing (LSH) is a common approach to the ANNS problem. Essentially, dataset points are indexed into buckets containing other points that are likely to be nearby. When querying, the points in the closest bucket(s) to $\bq$ are ranked based on their distance to $\bq$ - the closest points being returned as approximate nearest neighbours to $\bq$. A relatively recent extension of LSH is Locality Sensitive Filtering (LSF), in which points must pass filtering conditions before being added to a bucket. LSF ANNS methods can prove to be more practical by achieving faster querying performance with a smaller index size \cite{christiani2017framework, pham2022falconn++}. An example of this approach is \fpp (2022), introduced by Pham and Liu for angular distance ANNS. Practically implemented with heuristics inspired from well-grounded theory, \fpp is proven to be a more practical ANNS solver - exhibiting accelerated querying speeds for a fixed index size over LSH competitors.
 
-Locality Sensitive Hashing (LSH) is a common approach to the ANNS problem. Essentially, dataset points are indexed into buckets containing other points that are likely to be nearby. When querying, the points in the closest bucket(s) to $\bq$ can be ranked based on their distance to $\bq$ - the closest points being returned as approximate nearest neighbours to $\bq$. A relatively recent extension of LSH is Locality Sensitive Filtering (LSF), in which points must pass filtering conditions before being added to a bucket. LSF ANNS methods can prove to be more practical by achieving faster querying performance with a smaller index size \cite{christiani2017framework, pham2022falconn++}. An example of this approach is \fpp (2022), introduced by Pham and Liu for angular distance ANNS. Practically implemented with heuristics inspired from well-grounded theory, \fpp is proven to be a more practical ANNS solver - exhibiting accelerated querying speeds for a fixed index size over LSH competitors.
+An emerging trend in ANNS literature is the use of Graphics Processing Units (GPUs) to accelerate both indexing and querying greatly. Compared to traditional Central Processing Units (CPUs), GPUs offer an architecture that is well-suited to high-throughput, massively parallel computation over large datasets. This essential difference makes it naturally aligned to accelerating ANNS, since they are often reliant on numerically intensive workflows that are easily parallelised. For example, a frequently decisive factor in determining the speed of an ANNS algorithm are largely independent $d$-dimensional distance computations between data points - a process that a GPU has a clear advantage over CPUs \cite{chang2009compute, chang2008compute, huang2019gpu}. 
 
-% \paragraph{GPU accelerated ANNS.} 
-
-An emerging trend in ANNS literature is the use of Graphical Processing Units (GPUs) to accelerate both indexing and querying greatly. Compared to traditional Central Processing Units (CPUs), GPUs offer an architecture that is well-suited to high-throughput, massively parallel computation over large datasets. This essential difference makes it naturally aligned to accelerating ANNS, since they are often reliant on numerically intensive workflows that are easily parallelised. For example, a frequently decisive factor in determining the speed of an ANNS algorithm are largely independent $d$-dimensional distance computations between data points - a process that a GPU has a clear advantage over CPUs \cite{chang2009compute, chang2008compute, huang2019gpu}. 
-
-\fpp, initially implemented purely on the CPU, is a particularly compelling candidate for GPU acceleration. Much like other ANNS approaches, it built upon processes that are easily parallelised. Additionally, due to its bucket filtering mechanisms, it has demonstrably superior indexing space complexity than competitors. This is a salient fact: while GPUs are undoubtedly faster than CPUs for parallel computation, their main memory capacity often comes at a premium compared to CPUs.
+\fpp, initially implemented purely on the CPU, is a particularly compelling candidate for GPU acceleration. Much like other ANNS approaches, it is built with processes that are easily parallelised. Additionally, due to its bucket filtering mechanisms, it has demonstrably superior indexing space complexity than competitors. This is a salient fact: while GPUs are undoubtedly faster than CPUs for parallel computation, their main memory capacity often comes at a premium compared to CPUs.
 
 \paragraph{Contribution.} Motivated by the suitability of \fpp for GPU acceleration, we introduce \textbf{\cf} (CUDA-Falconn), a GPU-accelerated $k$ANNS algorithm inspired by \fpp. \cf is designed for a single GPU to solve ANNS using angular distance and inner-product similarity. The indexing stage uses a hybrid CPU-GPU approach, while querying is fully GPU-resident. To our knowledge, \cf represents the first GPU-accelerated ANNS method built upon LSF techniques. Our method retains the same hashing mechanisms as \fpp while incorporating several key modifications to better align with GPU architectural constraints, most notably the introduction of a \emph{fixed} maximum bucket size and the extension to inner-product similarity. Through extensive experimentation on modern large-scale datasets, we demonstrate the robustness and practical applicability of \cf. Furthermore, by benchmarking against established competitor algorithms, we position \cf within the broader landscape of GPU-accelerated ANNS methods.
 
@@ -184,7 +217,7 @@ An emerging trend in ANNS literature is the use of Graphical Processing Units (G
 \subsection{Nearest Neighbour Search}
 \label{sec:anns}
 
-Consider a dataset $X \subset \Real^d$ containing $n$ points with $d$ dimensions. NNS finds the closest point - the \emph{nearest neighbour} -  $\bxs \in X$ to a query $\bq$. The \textit{closeness} of a point and a query is measured by a distance function $\dist: \Real^d \times \Real^d \rightarrow \Real$. The $\dist$ function can take various forms, although it is commonly implemented as angular, inner product or Euclidean (L2) distance. We formalise the concept of a nearest neighbour in Eq.~\ref{eq:nns_def}. The closely related $k$NNS problem finds the set of the closest $k$ nearest neighbours to a query $\bq$. A graphical explanation of NNS and $k$NNS is given in Fig.~\ref{fig:nns-example}.
+Consider a dataset $X \subset \Real^d$ containing $n$ points with $d$ dimensions. NNS finds the closest point - the \emph{nearest neighbour} -  $\bxs \in X$ to a query $\bq$. The proximity of a point and a query is measured by a distance function $\dist: \Real^d \times \Real^d \rightarrow \Real$. The $\dist$ function can take various forms, although it is commonly implemented as angular, inner product or Euclidean (L2) distance. We formalise the concept of a nearest neighbour in Eq.~\ref{eq:nns_def}. The closely related $k$NNS problem finds the set of the closest $k$ nearest neighbours to a query $\bq$. A graphical explanation of NNS and $k$NNS is given in Fig.~\ref{fig:nns-example}.
 
 \begin{equation}
 \bxs = \arg\min_{\bx \in X} \dist(\bx, \bq)
@@ -193,7 +226,7 @@ Consider a dataset $X \subset \Real^d$ containing $n$ points with $d$ dimensions
 
 As discussed, ANNS is often preferred to an \textit{exact} NNS for modern practical applications. To define ANNS, given an approximation factor $c > 1 \in \Real$, ANNS returns a point $\bx' \in X$ whose distance to the query is at most a factor $c$ larger than that of the true nearest neighbour, as defined in Eq.~\ref{eq:anns_def}. This notion extends directly to the $k$-nearest neighbour case: $k$ANNS returns $k$ points whose distances to the query $\bq$ are within the same approximation bound. 
 
-We demonstrate ANNS using Euclidean distance in Fig.~\ref{fig:nns-example}. For a query $\bq$, the distance to its true nearest neighbour $\bx_3$ is equal to $r$. Given a $c > 1$, the set $\tNq =  \{\bx_1, \bx_2, \bx_4\}$ contains all points within $cr$ distance of $\bq$, thus are \emph{approximate} nearest neighbours to $\bq$. Any two points from $\tNq$ would solve the $k$ANNS problem for $\bq$ given $k=2$. 
+We demonstrate ANNS using Euclidean distance in Fig.~\ref{fig:nns-example}. For a query $\bq$, the distance to its true nearest neighbour $\bx_2$ is equal to $r$. Given a $c > 1$, the set $\tNq =  \{\bx_1, \bx_2, \bx_4\}$ contains all points within $cr$ distance of $\bq$, thus are \emph{approximate} nearest neighbours to $\bq$. Any two points from $\tNq$ would solve the $k$ANNS problem for $\bq$ given $k=2$. 
 
 \begin{equation}
 \dist(\bx', \bq) \leq c \cdot \dist(\bxs, \bq)
@@ -214,7 +247,7 @@ We demonstrate ANNS using Euclidean distance in Fig.~\ref{fig:nns-example}. For 
 \begin{figure}[H]
     \centering
     \includesvg[width=0.5\linewidth]{figs/diags/nns.drawio.svg}
-    \caption{Illustration of the NNS, $k$NNS and ANNS problems using L2 (straight-line) distance. \\ Here $\bx_{2}$ is the nearest neighbour to $\bq$ and $\{ \bx_{1}, \bx_{2}, \bx_{4}, \bx_{7} \}$ are the $k=4$ exact nearest neighbours to $\bq$.}
+    \caption{Illustration of the NNS, $k$NNS and ANNS problems using L2 (straight-line) distance. \\ Here $\bx_{2}$ is the nearest neighbour to $\bq$ and $\{ \bx_{1}, \bx_{2}, \bx_{4} \}$ are the $k=3$ exact nearest neighbours to $\bq$.}
     \label{fig:nns-example}
 \end{figure}
 
@@ -233,7 +266,7 @@ Minimising $\distip$ is therefore equivalent to maximising inner product similar
 
 \paragraph{Angular distance.}
 
-This is a distance metric measuring the angle $\theta_{\bx\by} \in [0, \pi]$ between two points:
+Angular distance is a distance metric measuring the angle $\theta_{\bx\by} \in [0, \pi]$ between two points:
 
 \begin{equation}
     \theta_{\bx \by} = \arccos\!\left(\frac{\dotxy}{\nbx \nby}\right)
@@ -311,7 +344,7 @@ Two points $\bx$ and $\bq$ only collide when they have identical hashes across $
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\linewidth]{figs/diags/lsh.png}
-    \caption{Illustration of creating an LSH index with $L$ tables, with a concatenated hash function $g$ from $l$ sub-hash functions.}
+    \caption{Illustration of creating an LSH index on a small dataset containing $n=5$ points. The index has $L$ tables, each with a concatenated hash function $g$ from $l$ sub-hash functions.}
     \label{fig:lsh}
 \end{figure}
 
@@ -330,7 +363,7 @@ The aforementioned approach of concatenating $l$ hash functions across $L$ table
 
 \subsection{LSH families for angular distance}
 
-This section studies the values of $\rho$ of common LSH families for angular distance for the \crNN problem for small $r$, including SimHash~\cite{charikar2002similarity} and Falconn~\cite{andoni2015practicaloptimallshangular}. To this end, we can define the \emph{cosine similarity} between $\bx$ and $\by$ in terms of angular distance from Eq.~\ref{eq:angular-distance} as:
+This section studies the values of $\rho$ of common LSH families for angular distance for the \crNN problem for small $r$, including SimHash~\cite{charikar2002similarity} and Falconn~\cite{andoni2015practical}. To this end, we can define the \emph{cosine similarity} between $\bx$ and $\by$ in terms of angular distance from Eq.~\ref{eq:angular-distance} as:
 
 \begin{equation}
     \cosim(\bx, \by) = \cos(\theta_{\bx \by}) = \frac{\bx^\top \by}{\nbx \nby}
@@ -360,7 +393,7 @@ Hence we can embed the Euclidean distance between $\bx$ and $\by$ using:
     \cosim(\bx, \by) = 1 - \frac{\|\bx-\by\|^2}{2}
 \end{equation}
 
-Consequently, minimising Euclidean distance on the unit sphere is equivalent to maximising cosine similarity, hence minimising angular distance. Ergo, the study of $\rho$ is equivalent in both regimes. For the \crNN problem, we can then derive the following expressions of equivalence between Euclidean distance and cosine similarity for close and far vectors. 
+Consequently, minimising Euclidean distance on the unit sphere is equivalent to maximising cosine similarity, hence minimising angular distance. Ergo, the study of $\rho$ is identical in both regimes. For the \crNN problem, we can then derive the following expressions of equivalence between Euclidean distance and cosine similarity for close and far vectors. 
 
 \begin{equation}
     \label{eq:lsh-t1}
@@ -475,7 +508,7 @@ Given this derivation of $\rho_{SH}$, we can present the following theorem:
 \subsubsection{Falconn}
 \label{sec:falconn}
 
-Falconn was first introduced by Andoni et al. \cite{andoni2015practical}. It is similar in spirit to SimHash, insofar as it relies on projections onto Gaussian random vectors; however, its hashing construction differs fundamentally, leading to distinct theoretical guarantees. As with the preceding discussion of SimHash, we first outline the hashing mechanism, then examine the associated collision probabilities, and finally derive the exponent $\rho$.
+Falconn was first introduced by Andoni et al. \cite{andoni2015practical}. It is similar in spirit to SimHash, insofar as it relies on projections onto Gaussian random vectors; however, its hashing construction differs markedly, leading to distinct theoretical guarantees. As with the preceding discussion of SimHash, we first outline the hashing mechanism, then examine the associated collision probabilities, and finally derive the exponent $\rho$.
 
 \paragraph{Hash function.}
 Consider a set of $D$ random vectors $\br_i$ with entries sampled from $\mN(0, 1)$, and
@@ -534,10 +567,10 @@ p_2 \approx D^{-c^2 r^2/(4-c^2 r^2)}
 
 \medskip
 
-Given this value of $\rho$, Andoni et al. show that it is asymptotically optimal; consequently, we can present the following theorem:
+Given this value of $\rho$, Andoni et al. show that it is asymptotically optimal for LSH applied to \crNN; consequently, we can present the following theorem:
 
 \begin{theorem}[LSH Exponent of Falconn]
-For \crNN with a small $c$ using angular distance, Falconn has an asymptotically optimal exponent $\rho$ satisfying:
+For LSH applied to \crNN with a small $c$ using angular distance, Falconn has an asymptotically optimal exponent $\rho$ satisfying:
 
 \[
 \rho \approx \frac{1}{c^2} \quad\text{as } r \to 0 \quad \text{and} \quad D \to \infty
@@ -576,7 +609,7 @@ The addition of an LSF filter to an LSH table creates new collision probabilitie
 
 \paragraph{Indexing space.}
 
-Relative to the original LSH scheme, the collision probability for a close pair is reduced from $p_1$ to $q_1 p_1$ while that of far pairs is also reduced from $p_2$ to $q_2 p_2$. Consequently, to maintain a constant success probability, the number of hash tables must be increased to $L = \bigO(1/{q_1 p_1})$, which is larger than the $\bigO(1/p_1)$ tables required by the underlying LSH construction. However, in real-world datasets, close pairs are far less frequent than far pairs. Consequently, the expected number of retained points per table is well below $n q_1$, therefore despite an increase in $L$, the total index size of an LSF construction is often smaller than $\bigO(nq_1/q_1p_1) = \bigO(n/p_1)$. Thus, the LSF index has superior indexing space complexity than the underlying LSH index. 
+Relative to the original LSH scheme, the collision probability for a close pair is reduced from $p_1$ to $q_1 p_1$ while that of far pairs is also reduced from $p_2$ to $q_2 p_2$. Consequently, to maintain a constant success probability, the number of hash tables must be increased to $L = \bigO(1/{q_1 p_1})$, which is larger than the $\bigO(1/p_1)$ tables required by the underlying LSH construction. However, in real-world datasets, close pairs are far less frequent than far pairs. Consequently, the expected number of retained points per table is well below $n q_1$, therefore despite an increase in $L$, the total index size of an LSF construction is often smaller than $\bigO(nq_1/q_1p_1) = \bigO(n/p_1)$. Thus, the LSF index usually has superior indexing space complexity than the underlying LSH index. 
 
 \paragraph{Querying speed.} Now assume an LSF filter is added to an LSH index with exponent $\rho$, satisfying:
 
@@ -587,16 +620,16 @@ Relative to the original LSH scheme, the collision probability for a close pair 
     \end{aligned}
 \end{equation}
 
-Under this condition, the LSF index then yields a new exponent $\rho' \le \rho$. As a result, solving \crNN requires only $\bigO(n^{\rho'})$ distance computations, yielding asymptotically faster queries. Together, the reduced bucket occupancy and improved exponent allow the LSF index to achieve lower index space complexity and faster query time than the original LSH index. Consequently, a key goal of practically creating an LSF index is to construct a filter where $q_1, q_2$ satisfy Eq.~\ref{eq:lsf-condition} - this motivates the introduction of \fpp
+It can be shown that, granting this condition holds, the LSF index then yields a new exponent $\rho' \le \rho$. As a result, solving \crNN requires only $\bigO(n^{\rho'})$ distance computations, yielding asymptotically faster queries. Together, the reduced bucket occupancy and improved exponent allow the LSF index to achieve lower index space complexity and faster query time than the original LSH index. Consequently, a key goal of practically creating an LSF index is to construct a filter where $q_1, q_2$ satisfy Eq.~\ref{eq:lsf-condition} - this motivates the introduction of \fpp
 
 \subsection{\fpp}
 
-\fpp~\cite{pham2022falconn++} extends Falconn by incorporating an LSF filter. By utilising this filter, \fpp is enabled a smaller $\rho'$ exponent than Falconn for angular distance; in practice, it outperforms Falconn in both indexing and querying. This section will focus on the theoretical underpinning of \fpp; in practice, however, \fpp is implemented with heuristics inspired by this theory, as detailed in Sec.~\ref{sec:fpp-in-practice}.
+\fpp~\cite{pham2022falconn++} extends Falconn by incorporating an LSF filter. By utilising this filter, \fpp attains a smaller $\rho'$ exponent than Falconn for angular distance; in practice, it outperforms Falconn in both indexing and querying. This section will focus on the theoretical underpinning of \fpp; in practice, however, \fpp is implemented with heuristics inspired by this theory, as detailed in Sec.~\ref{sec:fpp-in-practice}.
 
 \subsubsection{CEOs}
 \label{sec:ceos}
 
-Concomitant of Extreme Order Statistics (CEOs) is an ANNS technique introduced by the same authors as \fpp \cite{pham2021simple}. Much like Falconn, it leverages properties of random Gaussian projections at its core. To this end, consider a set of points $X$ and a set of $D$ Gaussian random vectors $R$, both with $d$ dimensions. For a query $\bq$, and for a large enough $D$, assume $\br_a = \argmax_{\br \in R}|\dotqr|$. Then in expectation, the projections of $\bx \in X$ onto $\br_a$ \emph{preserve} the inner product ordering of the same points with $\bq$. For example, for $\bx_1, \bx_2 \in X$, if $\bx_1^\top\bq > \bx_2^\top\bq$ then in expectation, for a large enough $D$, $\bx_1^\top\br_a > \bx_2^\top\br_a$,  also holds. In particular,
+Concomitant of Extreme Order Statistics (CEOs) is an ANNS technique introduced by the same authors as \fpp \cite{pham2021simple}. Much like Falconn, it leverages properties of random Gaussian projections at its core. To this end, consider a set of points $X$ and a set of $D$ Gaussian random vectors $R$, both with $d$ dimensions. For a query $\bq$, and for a large enough $D$, assume $\br_a = \argmax_{\br \in R}|\dotqr|$. Then in expectation, the projections of $\bx \in X$ onto $\br_a$ \emph{preserve} the inner product ordering of the same points with $\bq$. For example, for $\bx_1, \bx_2 \in X$, if $\bx_1^\top\bq > \bx_2^\top\bq$ then in expectation, for a large enough $D$, $\bx_1^\top\br_a > \bx_2^\top\br_a$,  also holds. In particular:
 
 \begin{lemma}~\cite{pham2021simple}\label{lm:CEOs}
 	For two points $\bx, \bq \in \mathcal{S}^d$ and significantly large $D$ random vectors $\br_i$, w.l.o.g. we assume that $\br_a = \argmax_{\br_i}{|\dotqr_i|}$. Then, we have
@@ -637,7 +670,7 @@ Given a sufficiently large $D$, $q_2$ can be made arbitrarily small. Consequentl
     \end{aligned}
 \end{equation}
 
-Consequently, since $\rho' \leq \rho$, for $r$ small, this LSF filter would create a more practical \crNN solver than Falconn. It is important to note that this value of $\rho'$ also makes a more practical \crNN solver than other rival angular LSH algorithms. For example, we showed that SimHash has an exponent $\rho_{SH} \approx 1/c \geq \rho'$ (Sec.~\ref{sec:simhash}). 
+Consequently, since $\rho' \leq \rho$, for $r$ small, this LSF filter would create a more practical \crNN solver than Falconn. It is important to note that this value of $\rho'$ also makes a more practical \crNN solver than other rival angular LSH-based algorithms. For example, we showed that SimHash has an exponent $\rho_{SH} \approx 1/c \geq \rho'$ (Sec.~\ref{sec:simhash}). 
 
 % \alert{Do we need a proper discussion here on the range of $r$ that this has to take, I'd rather leave out as a minor detail. There are the values of $r > \sqrt{2}$, and $r \approx \sqrt{2}$ that complicate things} 
 % \alert{No. There is no need for deep discussion here.}
@@ -670,11 +703,11 @@ The indexing process of \fpp uses several key mechanisms on top of the theoretic
 
 \paragraph{Multi-Probe Indexing.} 
 
-As is typical with LSH methods, points are hashed into each table using $h$ only \emph{once}. However, Pham et al. introduce index-time \emph{multi-probing}, in which each point $\bx$ is added to multiple nearby buckets per table. This is motivated by similar reasoning to query-time multi-probing \cite{lv2007multi}. Because true LSH collisions are probabilistic, a query $\bq$'s true nearest neighbours may not collide in the top-scoring bucket for $\bq$, but in nearby buckets. Consequently, it makes sense to also search these nearby buckets for candidates. If a nearest neighbour $\bx$ is then added to multiple nearby buckets, there is an increased chance of collision with $\bq$. In practice, this is implemented by adding points to their nearest $iProbes$ buckets in each table as ranked by their score (see L5--6 in Algorithm 1). 
+Typically, LSH methods hash points into a single bucket per table. However, Pham et al. introduce index-time \emph{multi-probing}, in which each point $\bx$ is added to multiple nearby buckets per table. This is motivated by similar reasoning to query-time multi-probing \cite{lv2007multi}. Because true LSH collisions are probabilistic, a query $\bq$'s true nearest neighbours may not collide in the top-scoring bucket for $\bq$, but in nearby buckets. Consequently, it makes sense to search these nearby buckets for candidates as well. If a nearest neighbour $\bx$ is then added to multiple nearby buckets, there is an increased chance of collision with $\bq$. In practice, this is implemented by adding points to their nearest $iProbes$ buckets in each table, ranked by score (see L5--6 in Algorithm 1). 
 
 \paragraph{Scale-based filtering.} 
 
-Pham et al. introduce a bucket filter inspired by the aforementioned threshold $t$ in Sec.~\ref{sec:ceos-lsf}. Consider a filter parametrised by a scaling parameter $\alpha \in (0,1)$, which keeps the top-$(\alpha b)$ points with the largest score in a bucket with size $b$. This can be seen as creating a unique threshold $t_i$ for each bucket. For example, a densely packed bucket would have an effective higher threshold than a sparse bucket containing fewer points. Without indexing multi-probing, this filter restricts the number of points per table to just $\alpha n$.
+Pham et al. introduce a bucket filter inspired by the aforementioned threshold $t$ in Sec.~\ref{sec:ceos-lsf}. Consider a filter parametrised by a scaling parameter $\alpha \in (0,1)$, which keeps the top-$(\alpha b)$ points with the largest score in a bucket with size $b$. This can be seen as creating a unique threshold $t_i$ for each bucket. For example, a densely packed bucket would have a higher effective threshold than a sparse bucket containing fewer points. Without indexing multi-probing, this filter restricts the number of points per table to just $\alpha n$.
 
 \paragraph{Refining the filtering mechanism.} 
 
@@ -683,7 +716,7 @@ Additionally, to stop bucket size scaling from overly penalising small buckets c
 
 \paragraph{Centring of dataset points} 
 
-Before indexing, the centroid of $X$ is moved to the origin. Formally, find the centroid $\bx_c = \frac{1}{n}\sum_{i=1}^n\bx$, then map each point with $\bx \mapsto \hat{\bx} = \bx - \bx_c$. Since $\bx_c$ is constant for all $\bx$, for any vector $\bq$, the ordering of $\bx^\top \bq$ is identical to $\hat{\bx}^\top \bq$. Note that although $\|\bx\| \ne 1$, the CEOs property (Lemma.\ref{lm:CEOs}) still holds \cite{pham2021simple}. This trick is justified as follows: since the Gaussian vectors in $R$ and $S$ are approximately centred on the origin, this can become problematic for highly skewed datasets whose centroid lies far from the origin, potentially causing many points to hash into a small selection of buckets. Pham et al. demonstrate that adding this heuristic improves the index quality and thus the query performance of Falconn-based methods.
+Before indexing, the centroid of $X$ is moved to the origin. Formally, find the centroid $\bx_c = \frac{1}{n}\sum_{i=1}^n\bx$, then map each point with $\bx \mapsto \hat{\bx} = \bx - \bx_c$. Since $\bx_c$ is constant for all $\bx$, for any vector $\bq$, the ordering of $\bx^\top \bq$ is identical to $\hat{\bx}^\top \bq$. Note that although $\|\bx\| \ne 1$, the CEOs property (Lemma.~\ref{lm:CEOs}) still holds \cite{pham2021simple}. This trick is justified as follows: since the Gaussian vectors in $R$ and $S$ are approximately centred on the origin, this can become problematic for highly skewed datasets whose centroid lies far from the origin, potentially causing many points to hash into a small selection of buckets. Pham et al. demonstrate that adding this heuristic improves index quality and, in turn, query performance for Falconn-based methods.
 
 \begin{algorithm}[H]
 	\caption{\fpp indexing}
@@ -704,6 +737,8 @@ Before indexing, the centroid of $X$ is moved to the origin. Formally, find the 
 	\end{algorithmic}
 \end{algorithm}
 
+\newpage 
+
 \subsubsection{\fpp Querying}
 
 The querying stage of \fpp is comparatively simpler than indexing and resembles a typical LSH querying procedure for $k$ANNS. Like other LSH-based methods \cite{lv2007multi, andoni2015practical}, it employs multi-probe querying to increase the diversity and size of the candidate set. \fpp achieves this by leveraging the CEOs property (Sec.~\ref{sec:ceos}) to identify the $qProbes$ closest buckets across all $L$ repeats based on their score with $\bq$. The querying procedure then follows a common LSH strategy: identify nearby buckets, gather candidates, and re-rank them to return the top-$k$ approximate nearest neighbours. The pseudo-code for this procedure is provided in Alg.~\ref{alg:FalconnQuerying}.
@@ -713,17 +748,17 @@ The querying stage of \fpp is comparatively simpler than indexing and resembles 
 	\label{alg:FalconnQuerying} 									
 	\begin{algorithmic} [1]
 		\Procedure{Querying} {$\bq, X, R, S$}
-		\State Let $\mC$ be the intersection of the top-$qProbes$ buckets across all repeats corresponding to the largest absolute projection values $score_{\br, \bs}(\bq) = |\bq^\top \br| + |\bq^\top \bs|$ for $(\br, \bs) \in \widehat{R} \times \widehat{S}$
+		\State Let $\mC$ be the union of the top-$qProbes$ buckets across all repeats corresponding to the largest absolute projection values $score_{\br, \bs}(\bq) = |\bq^\top \br| + |\bq^\top \bs|$ for $(\br, \bs) \in \widehat{R} \times \widehat{S}$
         \State Return the top-$k$ points in $\mC$ with the largest values of $\dotqx$.
 		\normalsize
 		\EndProcedure
 	\end{algorithmic}
 \end{algorithm}
 
-\subsection{Graphical Processing Units}
+\subsection{Graphics Processing Units}
 \label{sec:gpus}
 
-Graphical Processing Units (GPUs) are specialised processing units designed primarily for large-scale, parallelizable arithmetic calculations. While they were initially intended for graphical processing, they have since expanded to scientific applications. These include fields such as deep learning \cite{buber2018performance,jeon2021deep}, data mining \cite{fang2008parallel,cano2018survey} and numerical modelling \cite{michalakes2008gpu,gan2016gpu,hou2020gpu}. A GPU achieves high throughput by utilising massive parallelism, with modern devices providing on the order of thousands of lightweight cores, in contrast to CPUs, which typically offer fewer than one hundred high-performance cores. Accordingly, CPUs are optimised for low-latency, sequential execution at high clock rates, whereas GPUs favour parallel execution at comparatively lower clock speeds \cite{intel_cpu_gpu}. 
+Graphics Processing Units (GPUs) are specialised processing units designed primarily for large-scale, parallelizable arithmetic calculations. While they were initially intended for graphical processing, they have since expanded to scientific applications. These include fields such as deep learning \cite{buber2018performance,jeon2021deep}, data mining \cite{fang2008parallel,cano2018survey} and numerical modelling \cite{michalakes2008gpu,gan2016gpu,hou2020gpu}. A GPU achieves high throughput by utilising massive parallelism, with modern devices providing on the order of thousands of lightweight cores, in contrast to CPUs, which typically offer fewer than one hundred high-performance cores. Accordingly, CPUs are optimised for low-latency, sequential execution at high clock rates, whereas GPUs favour parallel execution at comparatively lower clock speeds \cite{intel_cpu_gpu}. 
 
 This section provides a summary of relevant GPU concepts necessary to understand \cf. Due to the immense complexity of modern GPU design and engineering, topics are simplified or omitted for brevity. Additionally, the discussion is oriented around a typical NVIDIA-manufactured GPU, as this is the target architecture for \cf. With this in mind, we first present a simplified view of GPU architecture and its execution model, followed by primers on CUDA programming and hybrid CPU–GPU systems.
 
@@ -733,11 +768,13 @@ We briefly summarise key aspects of GPU architecture relevant to this work, spec
 
 \paragraph{GPU processors.}
 
-As mentioned, a GPU is based on the idea of hundreds to thousands of independent cores. At the highest level, there are Streaming Multiprocessors (SMs), which are comparable to a CPU core. A typical GPU has between 50 and 150 SMs, depending on the model. For example, a data-centre oriented H100 GPU has 114 SMs \cite{nvidia_hopper_architecture_2022} (see Fig.~\ref{fig:gpu-arch}). Within each SM, there are smaller processing units broadly grouped into CUDA and Tensor Cores. An individual CUDA Core (CC) is specialised for general arithmetic on a specific data type, for example, 32-bit floating points \cite{nvidia_ampere_ga102_2020}. There are typically 100+ CCs per SM, allowing for parallel workflows. Tensor Cores are designed for large-scale matrix multiply–accumulate (MMA) operations and are particularly effective for workloads involving large matrices, such as deep learning \cite{nvidia_hopper_architecture_2022}. While they provide substantial performance gains for MMA-dominated workloads, their specialised design limits their applicability to more general computation. Consequently, GPU operations that cannot be naturally expressed as large MMA workloads are typically executed on CUDA Cores.
+As mentioned, a GPU leverages hundreds to thousands of independent cores. At the highest level, there are Streaming Multiprocessors (SMs), which are comparable to a CPU core. A typical GPU has between 50 and 150 SMs, depending on the model. For example, a data-centre oriented H100 GPU has 114 SMs \cite{nvidia_hopper_architecture_2022} (see Fig.~\ref{fig:gpu-arch}). Within each SM, there are smaller processing units broadly grouped into CUDA and Tensor Cores. An individual CUDA Core (CC) is specialised for general arithmetic on a specific data type, for example, 32-bit floating points \cite{nvidia_ampere_ga102_2020}. There are typically 100+ CCs per SM. Tensor Cores are designed for large-scale matrix multiply–accumulate (MMA) operations and are particularly effective for workloads involving large matrices, such as deep learning \cite{nvidia_hopper_architecture_2022}. While they provide substantial performance gains for MMA-dominated workloads, their specialised design limits their applicability to more general computation. Consequently, GPU operations that cannot be naturally expressed as large MMA workloads are typically executed on CUDA Cores.
 
 \paragraph{GPU Memory Basics.}
 
-\textit{Note: out of necessity, this section refers to CUDA blocks and threads, which are defined in the next section (Sec.\ref{sec:cuda})}. Like a CPU, a GPU employs a multi-tiered approach to memory management. At the highest level, there is device-wide \textit{global memory}. This has the largest space and bandwidth of all GPU memory types; accordingly, it is typically used for storing large data structures. Accesses to global memory are normally costly relative to the GPU's clock speed; therefore, a device-wide L2 cache is used to prevent unnecessary global memory reads. While global memory is shared across the entire device, each SM maintains its own on-chip memory hierarchy. This allows frequently accessed data to be reused with low latency, reducing the need for repeated global memory transactions. This hierarchy consists of register memory, shared memory, and an SM-local L1 cache. Register memory is the fastest tier and is used for temporary variables private to each thread. Next comes shared memory and the L1 cache, which provide low-latency, on-chip storage for data reused within a thread block. In order of increasing latency, memory access on a GPU progresses from registers, to shared memory and the L1 cache, then to the device-wide L2 cache, and finally to global memory — with global memory being orders of magnitude slower and therefore the most expensive in performance terms \cite{harris_using_shared_memory_2013}. Efficient GPU programs should thus funnel most accesses toward the fastest tiers and reserve global memory accesses only when unavoidable.  A key point to note is that, due to the nuanced structure of GPU memory, GPU programs must pay close attention to how memory is used, unlike CPU memory, which excels at flexibility and adaptability across a wide range of workloads.
+\textit{Note: out of necessity, this section refers to CUDA blocks and threads, which are defined in the next section (Sec.~\ref{sec:cuda})}. Like a CPU, a GPU employs a multi-tiered memory management approach. At the highest level, there is device-wide \textit{global memory}. This has the largest capacity of all GPU memory types; accordingly, it is usually used for storing large data structures. Accesses to global memory are usually costly relative to the GPU's clock speed; therefore, a device-wide L2 cache is used to prevent unnecessary global memory reads. While global memory is shared across the entire device, each SM maintains its own on-chip memory hierarchy. This allows frequently accessed data to be reused with low latency, reducing the need for repeated global memory transactions. This hierarchy consists of register memory, shared memory, and an SM-local L1 cache. Register memory is the fastest tier and is used for temporary variables private to each thread. Next comes shared memory and the L1 cache, which provide low-latency, on-chip storage for data reused within a thread block. 
+
+In order of increasing latency, memory access across a GPU progresses from registers to shared memory and the L1 cache, then to the device-wide L2 cache, and finally to global memory, which has orders of magnitude higher latency and is therefore the most expensive in terms of performance \cite{harris_using_shared_memory_2013}. Efficient GPU programs should thus funnel most accesses toward the fastest tiers and reserve global memory accesses only when unavoidable.  A key point to note is that, due to the nuanced structure of GPU memory, GPU programs must pay close attention to how memory is used, unlike CPU memory, which excels at flexibility and adaptability across a wide range of workloads.
 
 % Shared memory and the L1 cache occupy the same physical block and can be partitioned by the programmer to trade off between more shared memory or a larger L1 cache.
 
@@ -757,7 +794,7 @@ As previously discussed, global memory accesses are significantly slower than on
 
 The CUDA platform is a suite of software tools developed by NVIDIA to ease the development of GPU applications. In addition to components such as compilers and specialised libraries, CUDA’s primary benefit lies in providing a structured programming model for writing and executing GPU code.
 
-At the core of this model is the \textit{kernel grid}, which defines how a function, called a \textit{kernel}, is executed across the GPU. A kernel represents a general-purpose function that may implement simple operations such as matrix addition (see Alg.~\ref{alg:matrix_addition}), as well as more complex patterns including large-scale accumulation and reduction. A kernel grid is hierarchically subdivided into \textit{thread blocks}, each containing multiple independent \textit{threads}. Thread blocks are scheduled onto Streaming Multiprocessors (SMs), where several blocks may execute concurrently, subject to resource constraints. However, an individual thread block cannot span multiple SMs. Threads within a block are organised into groups of 32 called \textit{warps} \cite{nvidia_warp_level_2020}. Within a warp, threads are referred to as \textit{lanes} and are indexed from 0 to 31, each maintaining its own register state. Warps execute instructions in lockstep, issuing a single instruction per cycle across the SM’s functional units (e.g., CUDA or Tensor Cores).
+At the core of this model is the \textit{kernel grid}, which defines how a function, called a \textit{kernel}, is executed across the GPU. A kernel represents a general-purpose function that may implement simple operations such as matrix addition (see Alg.~\ref{alg:matrix_addition}), as well as more complex patterns including large-scale accumulation and reduction. A kernel grid is subdivided into \textit{thread blocks}, each containing multiple independent \textit{threads}. Thread blocks are scheduled onto Streaming Multiprocessors (SMs), where several blocks may execute concurrently, subject to resource constraints. However, an individual thread block cannot span multiple SMs. Threads within a block are organised into groups of 32 called \textit{warps} \cite{nvidia_warp_level_2020}. Within a warp, threads are referred to as \textit{lanes} and are indexed from 0 to 31, each maintaining its own register state. Warps execute instructions in lockstep, issuing a single instruction per cycle across the SM’s functional units (e.g., CUDA or Tensor Cores).
 
 A visual overview of CUDA’s thread, block, and grid hierarchy is shown in Fig.~\ref{fig:nvidia-cuda-model}.
 
@@ -785,23 +822,23 @@ A visual overview of CUDA’s thread, block, and grid hierarchy is shown in Fig.
 
 \subsubsection{Hybrid CPU-GPU systems}
 
-Beyond algorithms designed exclusively for either CPUs or GPUs, a common strategy is to develop hybrid approaches that leverage both architectures in tandem \cite{mittal2015survey,rosenfeld2022query}. CPUs and GPUs each have unique strengths and constraints that limit their practical applicability; for instance, CPUs are well-suited to general-purpose tasks with limited parallelisation opportunities. However, hybrid CPU–GPU systems introduce non-negligible overheads. Perhaps the most significant is often data transfer between CPU main memory and GPU global memory, which can become a non-trivial cost for large datasets. Synchronisation overhead is another concern. While CPUs and GPUs operate asynchronously, program dependencies may require one processor to wait for the other — for instance, the CPU waiting on GPU computation, and/or vice versa.
+Beyond algorithms designed exclusively for either CPUs or GPUs, a common strategy is to develop hybrid approaches that leverage both architectures in tandem \cite{mittal2015survey,rosenfeld2022query}. CPUs and GPUs each have unique strengths and constraints that limit their practical applicability; for instance, CPUs are well-suited to general-purpose tasks with limited parallelisation opportunities. However, hybrid CPU–GPU systems introduce non-negligible overheads. Perhaps the most significant is often data transfer between CPU main memory and GPU global memory, which can become a non-trivial cost for large datasets. Synchronisation overhead is another concern. While CPUs and GPUs operate asynchronously, program dependencies may require one processor to wait for the other — for instance, the CPU waiting on GPU computation, and vice versa.
 
 \section{Related Work}
 
 \subsection{Approximate Nearest Neighbour Search}
 
-As discussed in Section \ref{sec:anns}, ANNS is often preferred to exact NNS because of scalability issues with modern large-scale datasets. As a result, ANNS has become a large and rapidly growing research area. Typically, an ANNS method comprises two stages: \textit{indexing} and \textit{querying}. Indexing constructs a data structure over $X$ that supports fast retrieval, while querying uses this structure to recover the $k$ nearest neighbours of a query $\bq$. Nearly all ANNS query methods rely on a two-stage retrieval strategy: first producing a small candidate set from $X$, then evaluating exact distances within that set to a query $\bq$. Distances may be computed exactly, or approximated using techniques such as vector quantisation \cite{ge2013optimized, kalantidis2014locally, douze2025faiss}. Although these methods reduce memory and increase throughput, they fall outside the scope of this work. We therefore assume that the original dataset $X$ is explicitly stored, enabling exact distance evaluation.
+ANNS is often preferred over exact NNS because of scalability issues with modern large-scale datasets. Consequently, it has become a large and rapidly growing research area. As previously mentioned, typically an ANNS method comprises two stages: \textit{indexing} and \textit{querying}. Indexing constructs a data structure over $X$ that supports fast retrieval, while querying uses this structure to recover the $k$ nearest neighbours of a query $\bq$. Nearly all ANNS query methods rely on a two-stage retrieval strategy: first producing a small candidate set from $X$, then evaluating exact distances within that set to a query $\bq$. Distances may be computed exactly, or approximated using techniques such as vector quantisation \cite{ge2013optimized, kalantidis2014locally, douze2025faiss}. Although these methods reduce memory and increase throughput, they fall outside the scope of this work. We therefore assume that the original dataset $X$ is explicitly stored, enabling exact distance evaluation.
 
 Research into ANNS generally aims to optimise indexing and querying for real-world applications. Since ANNS is often applied to large-scale datasets, the resulting algorithm must be minimally resource-intensive. Ideally, an ANNS algorithm is fast to index and query, has a low memory footprint and is accurate. In large-scale recommendation systems, for example, low latency, high precision, and low memory usage are all critical for economic and operational scalability.
 
-An ANNS algorithm is particularly sensitive to the data domain in which it is applied. It is often the case that an algorithm has much better performance on one dataset as compared to another for a specific trade-off (for example, accuracy over queries answered per second) \cite{jaasaari2025vibe,aumuller2020ann}. Consequently, when evaluating the relative performance of an ANNS algorithm against competitors, it is vital to benchmark it across a wide range of datasets and performance metrics, including accuracy, query throughput, and index size.
+ANNS algorithms are usually sensitive to the domain of the dataset to which they are applied. It is often the case that an algorithm has much better performance on one dataset as compared to another for a specific trade-off (for example, accuracy over queries answered per second) \cite{jaasaari2025vibe,aumuller2020ann}. Consequently, when evaluating the relative performance of an ANNS algorithm against competitors, it is vital to benchmark it across a wide range of datasets and performance metrics, including accuracy, query throughput, and index size.
 
 Research into ANNS algorithms can be broadly divided into four families: graph-based methods, inverted-file indexing, hashing techniques, and tree-based approaches. It is important to note that these families should be understood primarily as organisational abstractions, grouping methods by their dominant indexing and query mechanisms rather than by shared theoretical guarantees or performance characteristics. In practice, many modern ANNS methods combine elements from multiple families, which makes broad, family-level descriptions of behaviour difficult to justify.
 
 \paragraph{Graph-based indexes.}
 
-Graph-based methods \cite{wang2021comprehensive,harwood2016fanng,fu2017fast,malkov2018efficient} generally aim to organise a dataset into a graph structure that facilitates fast and accurate searching at query time. A typical pattern is to use dataset points as nodes in a graph, with edges connecting nodes indicating the proximity of the corresponding points. Once an index is created, it can be searched to find a set of candidate neighbourhood points for a query. A key graph-based ANNS algorithm is Hierarchical Navigable Small World Graphs (HNSW) \cite{malkov2018efficient}. HNSW constructs a multi-layer graph in which connections tend to span larger distances in higher layers and progressively shorter distances in lower layers. Querying proceeds via greedy traversal from the top layer until a local minimum is reached, after which the search descends layer by layer, using each local minimum as the entry point for the next layer. At the bottom layer, distances are evaluated for a limited set of candidate points to return the $k$ nearest neighbours. The idea of HNSW's layered graph traversal is shown in Fig.~\ref{fig:hnsw}
+Graph-based methods \cite{wang2021comprehensive,harwood2016fanng,fu2017fast,malkov2018efficient} aim to organise a dataset into a graph-based index. A common pattern is to use dataset points as nodes in a graph, with edges connecting nodes indicating the proximity of the corresponding points. Once an index is created, it can be searched to find a set of candidate neighbourhood points for a query. A key graph-based ANNS algorithm is Hierarchical Navigable Small World Graphs (HNSW) \cite{malkov2018efficient}. HNSW constructs a multi-layer graph in which edges tend to span larger distances in higher layers and progressively shorter distances in lower layers. Querying proceeds via greedy traversal from the top layer until a local minimum is reached, after which the search descends layer by layer, using each local minimum as the entry point for the next layer. At the bottom layer, distances are evaluated for a limited set of candidate points to return the $k$ nearest neighbours. The concept of HNSW's layered graph traversal is shown in Fig.~\ref{fig:hnsw}
 
 \begin{figure}
     \centering
@@ -812,23 +849,23 @@ Graph-based methods \cite{wang2021comprehensive,harwood2016fanng,fu2017fast,malk
 
 \paragraph{Inverted file indexing.}
 
-Another key ANNS family utilises Inverted File Indexing (IVF) \cite{baranchuk2018revisiting,amato2014mi,amato2008approximate,douze2025faiss}. This creates an indexing structure that is essentially a coarse partitioning of the dataset into \emph{clusters} (also known as \emph{cells}). Each dataset vector is assigned to a single cluster defined by a coarse partition of the vector space. This partition is typically learned during index construction, for example, using k-means to assign vectors to their nearest cluster. At the query stage, clusters are selected based on the proximity of their centroids to the query, and the vectors within these clusters form the candidate set for that query. Since IVF indices are essentially a re-ordering of a dataset, they have a minimal memory footprint.
-Additionally, since clusters can be stored contiguously in memory,  IVF algorithms are relatively cache-efficient compared to other ANNS methods. The FAISS library \cite{douze2025faiss} is an NNS library that implements several IVF-based methods. Of note is the 'IndexIVF' index type \cite{faiss_indexes_wiki}, here, the number of clusters is dictated by the parameter $nlist$. When querying, the vectors in the $nprobe$ nearest cells are used to compute distances into a top-$k$ ranking. While FAISS's IndexIVF was initially built for CPUs, it also provides a GPU implementation, which is discussed further in Sec .~\ref{sec:gpuAnns}. An illustration of IVF indexing and querying stages is shown in Fig.~\ref{fig:ivf}.
+Another key ANNS family is Inverted File Indexing (IVF) \cite{baranchuk2018revisiting,amato2014mi,amato2008approximate,douze2025faiss}. This creates an indexing structure that is essentially a coarse partitioning of the dataset into \emph{clusters} (also known as \emph{cells}). Each dataset vector is assigned to a single cluster defined by a coarse partition of the vector space. This partition is typically learned during index construction, for example, by using k-means. At the query stage, clusters are selected based on the proximity of their centroids to the query, and the vectors within these clusters form the candidate set. Since IVF indices are essentially a re-ordering of a dataset, they have a minimal memory footprint.
+Additionally, since clusters can be stored contiguously in memory,  IVF algorithms are relatively cache-efficient compared to other ANNS methods. The FAISS library \cite{douze2025faiss} is an NNS library that implements several IVF-based methods. Of note is the 'IndexIVF' index type \cite{faiss_indexes_wiki}, here, the number of clusters is dictated by the parameter $nList$. When querying, the vectors in the $nProbe$ nearest cells are used to compute distances into a top-$k$ ranking. While FAISS's IndexIVF was initially built for CPUs, it also provides a GPU implementation, which is discussed further in Sec .~\ref{sec:gpuAnns}. An illustration of IVF indexing and querying stages is shown in Fig.~\ref{fig:ivf}.
 
 \begin{figure}
     \centering
     \includegraphics[width=0.5\linewidth]{figs/diags/faiss-ivf.png}
-    \caption{Illustration of IVF partitioning and indexing on a dataset $X$ with $nlist=4$. During querying, a top-$k$ ANNS query is performed for $\bq$ with $k=4$. With $nprobe=2$, the partitions associated with centroids $\mathbf{c}_1$ and $\mathbf{c}_3$ are searched, and exact distances are evaluated within these partitions. The resulting nearest neighbours are the points labelled $2, 5, 9,$ and $12$.}
+    \caption{Illustration of IVF partitioning and indexing on a dataset $X$ with $nList=4$. During querying, a top-$k$ ANNS query is performed for $\bq$ with $k=4$. With $nProbe=2$, the partitions associated with centroids $\mathbf{c}_1$ and $\mathbf{c}_3$ are searched, and exact distances are evaluated within these partitions. The resulting nearest neighbours are the points labelled $2, 5, 9,$ and $12$.}
     \label{fig:ivf}
 \end{figure}
 
 \paragraph{Hashing methods.}
 
-Other key algorithms are based on hashing techniques \cite{pham2022falconn++,pham2021simple,cheng2024robust,pan2011fast,becker2016new}. These use randomised hashing functions to add dataset points to sets called \emph{buckets}. This is done such that nearby dataset points are likely to be stored in the same buckets, while disparate points aren't. To find the neighbours of a query, hash functions are used to identify the closest buckets, and the intersection of these buckets forms the candidate set for distance calculations. Hashing functions are often fast to execute, often relying on relatively fast techniques such as random projections, bitwise operations and Fast Hadamard Transforms \cite{jafari2021survey, pham2022falconn++}. However, this speed often comes at the expense of query accuracy; consequently, it is often necessary to add dataset points to multiple buckets \cite{xu2011complementary,lv2007multi}, which improves query accuracy at the expense of larger indices. A key sub-category is Locality Sensitive Hashing (Sec.~\ref{sec:lsh}), used by algorithms such as FALCONN \cite{andoni2015practical}, ACHash/DHHash \cite{dasgupta2011fast}, SRP-LSH \cite{ji2012super} and others \cite{pan2011fast,gorisse2011locality,huang2015query,wang2014hashing,jafari2021survey}. The closely related Locality Sensitive Filtering (Sec .~\ref {sec:lsf}) is a relatively new technique in ANNS, with just a few papers applying it \cite{pham2022falconn++, christiani2017framework}. Other hashing sub-categories include Spectral Hashing \cite{weiss2008spectral}, and Semantic Hashing \cite{salakhutdinov2009semantic}. 
+Other key algorithms are based on hashing techniques \cite{pham2022falconn++,pham2021simple,cheng2024robust,pan2011fast,becker2016new}. These use randomised hashing functions to add dataset points to sets called \emph{buckets}. This is done such that nearby dataset points are likely to be stored in the same buckets, while disparate points aren't. To find the neighbours of a query, hash functions are used to identify the closest buckets, and the union of these buckets forms the candidate set for distance calculations. Hashing functions are often fast to execute, often relying on relatively fast techniques such as random projections, bitwise operations, or Fast Hadamard Transforms \cite{jafari2021survey, pham2022falconn++}. However, this speed often comes at the expense of query accuracy; consequently, it is often necessary to add dataset points to multiple buckets \cite{xu2011complementary,lv2007multi}, which improves query accuracy at the expense of larger indices. A key sub-category is Locality Sensitive Hashing (Sec.~\ref{sec:lsh}), used by algorithms such as FALCONN \cite{andoni2015practical}, ACHash/DHHash \cite{dasgupta2011fast}, SRP-LSH \cite{ji2012super} and others \cite{pan2011fast,gorisse2011locality,huang2015query,wang2014hashing,jafari2021survey}. The closely related Locality Sensitive Filtering (Sec.~\ref {sec:lsf}) is a relatively new technique in ANNS, with just a few papers applying it \cite{pham2022falconn++, christiani2017framework}. Other hashing sub-categories include Spectral Hashing \cite{weiss2008spectral}, and Semantic Hashing \cite{salakhutdinov2009semantic}. 
 
 \paragraph{Tree-based indices.}
 
-Another important family of methods uses tree-based indices \cite{hyvonen2016fast, jaasaari2019efficient, ram2019revisiting, sun2023soar, bernhardsson2015annoy}, in which the dataset is partitioned using tree-like structures. At query time, the created tree index can be traversed to find a set of candidate points for a query. A key tree-based algorithm is Spotify's ANNOY \cite{bernhardsson2015annoy}. This repeatedly subdivides the dataset into subdivisions defined by random hyperplanes between sampled points (see Fig.~\ref{fig:annoy}. Other approaches use $kd$-trees \cite{ram2019revisiting,chen2019fast,panigrahy2008improved}, which repeatedly split a $ k$-dimensional dataset across one-dimensional hyperplanes to construct a tree. $kd$-trees are not naturally suited to large scale datasets \cite{panigrahy2008improved}, thus a small body of research is focussed utilizing $kd$-tree based techniques for large scale datasets \cite{panigrahy2008improved,avrithis2016high,ram2019revisiting}.
+Another important family of methods uses tree-based indices \cite{hyvonen2016fast, jaasaari2019efficient, ram2019revisiting, sun2023soar, bernhardsson2015annoy}, in which the dataset is partitioned using tree-like structures. At query time, the created tree index is traversed to find a set of candidate points for a query. A key tree-based algorithm is Spotify's ANNOY \cite{bernhardsson2015annoy}. This repeatedly subdivides the dataset into subdivisions defined by random hyperplanes between sampled points (see Fig.~\ref{fig:annoy}). Other approaches use $kd$-trees \cite{ram2019revisiting,chen2019fast,panigrahy2008improved}, which repeatedly split a $ k$-dimensional dataset across one-dimensional hyperplanes to construct a tree. $kd$-trees are not naturally suited to large scale datasets \cite{panigrahy2008improved}, thus a small body of research is focused on utilising $kd$-tree based techniques for large scale datasets \cite{panigrahy2008improved,avrithis2016high,ram2019revisiting}.
 
 \begin{figure}
     \centering
@@ -840,71 +877,53 @@ Another important family of methods uses tree-based indices \cite{hyvonen2016fas
 \subsection{GPU Accelerated Nearest Neighbour Search}
 \label{sec:gpuAnns}
 
-While research into nearest-neighbour search (NNS) has traditionally focused on CPU-based algorithms, a parallel line of work explores accelerating NNS with GPUs. As discussed in Section \ref{sec:gpus}, GPUs are particularly well suited to arithmetic-heavy and highly parallel workloads, making them a natural fit for both exact and approximate NNS. In practice, queries are typically processed in large batches—often hundreds or thousands at a time—to maximise resource utilisation. Since individual queries can be mainly evaluated independently, this batch structure maps cleanly onto the GPU’s parallel execution model. Moreover, a dominant computational bottleneck in many ANNS methods is the evaluation of large numbers of independent distance computations between a query and its candidate points, a task that GPUs excel at.
+While research into nearest-neighbour search (NNS) has traditionally focused on CPU-based algorithms, a parallel line of work explores accelerating NNS with GPUs. As discussed in Section \ref{sec:gpus}, GPUs are particularly well suited to arithmetic-heavy and highly parallel workloads, making them a natural fit for both exact and approximate NNS. In practice, queries are typically processed in large batches—often hundreds or thousands at a time—to maximise resource utilisation. Since individual queries can be mainly evaluated independently, this batching regime maps cleanly onto the GPU’s parallel execution model. Moreover, a dominant computational bottleneck in many ANNS methods is the evaluation of large numbers of independent distance computations between a query and its candidate points, a task that GPUs excel at \cite{chang2009compute, chang2008compute, huang2019gpu}.
 
-Early GPU NNS methods focused on computing exact NNS. Foundational work from Garcia et al.\ (2018) implemented a brute force NNS algorithm using the CUDA platform \cite{garcia2008fast}. This was shown to be orders of magnitude faster than existing CPU brute-force methods, laying the groundwork for future GPU-based NNS methods. However, owing to the same reasons of necessity and practicality that limit exact NNS (see Sec.~\ref{sec:anns}), GPU-based NNS research has primarily focused on ANNS. Also, much like CPU ANNS, GPU ANNS algorithms can be organised into families of approaches.
+Early GPU NNS methods focused on computing exact NNS. Foundational work from Garcia et al.\ (2018) implemented a brute force NNS algorithm using the CUDA platform \cite{garcia2008fast}. This was shown to be orders of magnitude faster than existing CPU brute-force methods, laying the groundwork for future GPU-based NNS methods. However, owing to the same reasons of necessity and practicality that limit exact NNS (see Sec.~\ref{sec:anns}), GPU-based NNS research has primarily focused on ANNS. Also, much like CPU ANNS, GPU ANNS algorithms can be organised into broad families of approaches.
 
 \paragraph{GPUs graph-based indexes.}
-Perhaps the largest subfield of GPU ANNS is the use of graph-based methods \cite{groh2022ggnn,zhao2020song,harwood2016fanng,sun2022out,yu2022gpu,ootomo2024cagra,li2025scalable}. SONG (2020) \cite{zhao2020song} is a graph searching algorithm built using a GPU for executing queries in an accelerated manner. It relies on a myriad of techniques, such as hash tables and memory optimisations, to significantly accelerate graph traversal as compared to other graph-based CPU ANNS methods. However, a key weakness is that it relies on a prebuilt graph index (e.g., nan NSW graph \cite{malkov2014approximate} using a CPU); consequently, it doesn't offer accelerated methods to create the index it requires. On the other hand, GGNN (2022) \cite{groh2022ggnn} provides a fully GPU-accelerated pipeline for both index construction and querying, although graph construction can remain computationally expensive. FANNG \cite{harwood2016fanng} exploits assumptions about low intrinsic dimensionality to construct a graph index that is searchable on either CPU or GPU. Alas, this reliance on data distribution properties - specifically for feature vector datasets - limits its general applicability across other datasets.
+Perhaps the largest subfield of GPU ANNS is the use of graph-based methods \cite{groh2022ggnn,zhao2020song,harwood2016fanng,sun2022out,yu2022gpu,ootomo2024cagra,li2025scalable}. SONG (2020) \cite{zhao2020song} is essentially a GPU-based graph searching algorithm for ANNS. It relies on a myriad of techniques, such as hash tables and memory optimisations, to significantly accelerate graph traversal as compared to other graph-based CPU ANNS methods. However, a key weakness is that it relies on a prebuilt graph index (e.g., an NSW graph \cite{malkov2014approximate} using a CPU); consequently, it doesn't offer accelerated methods to create the index it requires. On the other hand, GGNN (2022) \cite{groh2022ggnn} provides a fully GPU-accelerated pipeline for both index construction and querying, although graph construction can remain computationally expensive. FANNG \cite{harwood2016fanng} exploits assumptions about low intrinsic dimensionality to construct a graph index that is searchable on either CPU or GPU. Alas, this reliance on data distribution properties - specifically for feature vector datasets - limits its general applicability across other datasets.
 
 \paragraph{GPU IVF methods.}
 
-Perhaps the most well-known GPU ANNS methods are provided by the FAISS library \cite{douze2025faiss}. FAISS implements a broad range of GPU-accelerated index types, including exact search, inverted file indexing (IVF), and quantisation-based methods such as Product Quantisation (PQ) \cite{kim1999quantization}. While PQ-based indices are central to large-scale ANNS due to their memory–accuracy trade-offs, they rely on approximate distance evaluations. They are therefore less relevant in this context. Among FAISS’s offerings, GpuIndexIVFFlat, which performs ANNS using exact distance computations, is the most appropriate point of comparison with CuFalconn. FAISS is a natural comparison point due to the maturity and applicability of its GPU ANNS implementations. The underlying IVF methodology is well studied and has demonstrated robust performance across a wide range of datasets in CPU-based evaluations \cite{aumuller2020ann, jaasaari2025vibe}, suggesting a similar breadth of applicability when deployed on the GPU. Coupled with a long development history and sustained optimisation effort, FAISS can reasonably be regarded as a current state-of-the-art reference for GPU-based ANNS.
+Perhaps the most well-known GPU ANNS methods are provided by the FAISS library \cite{douze2025faiss}. FAISS implements a broad range of GPU-accelerated index types, including exact search, inverted file indexing (IVF), and quantisation-based methods such as Product Quantisation (PQ) \cite{kim1999quantization}. While PQ-based indices are central to large-scale ANNS due to their memory–accuracy trade-offs, they rely on approximate distance evaluations. They are therefore less relevant in this context. Among FAISS’s offerings, GpuIndexIVFFlat, which performs ANNS using exact distance computations, is the most appropriate point of comparison with \cf. FAISS is a natural comparison point due to the maturity and applicability of its GPU ANNS implementations. The underlying IVF methodology is well studied and has demonstrated robust performance across a wide range of datasets in CPU-based evaluations \cite{aumuller2020ann, jaasaari2025vibe}, suggesting a similar breadth of applicability when deployed on the GPU. Coupled with a long development history and sustained optimisation effort, FAISS can reasonably be regarded as a current state-of-the-art reference for GPU-based ANNS.
 
 \paragraph{Hashing and tree methods.}
 
-Besides graph-based methods and FAISS, there have been a handful of other approaches to accelerate ANNS on GPUs. Wieschollek et al.\ \cite{wieschollek2016efficient}, used PQ \cite{kim1999quantization} to create searchable trees called Product Quantization Trees (PQT) on the GPU. An LSH-based approach, FLASH \cite{wang2018randomized}, was designed for ultra-high-dimensional datasets, where both the dataset size and dimensionality are high ($n$ large and $n \approx d$). At the same time, FLASH demonstrates substantial speedups in this regime; its effectiveness on more conventional datasets, where $d \ll n$, remains yet unproven.
+Besides graph-based methods and FAISS, a handful of other approaches have been proposed to accelerate ANNS on GPUs. Wieschollek et al.\ \cite{wieschollek2016efficient}, used PQ to create searchable trees called Product Quantization Trees (PQT) on the GPU. An LSH-based approach, FLASH \cite{wang2018randomized}, was designed for ultra-high-dimensional datasets, where both the dataset size and dimensionality are high ($n$ large and $n \approx d$). At the same time, FLASH demonstrates substantial speedups in this regime; its effectiveness on more conventional datasets, where $d \ll n$, remains yet unproven.
 
 \paragraph{Hybrid and Multi-GPU.}
-Beyond the conventional use of a single GPU for ANNS acceleration, several works explore more unconventional GPU utilisation strategies. Hybrid CPU–GPU approaches partition computation across hardware units to balance memory constraints and computational efficiency \cite{xiang2019accelerating,tian2024fusionanns}. For instance, GAIPS \cite{xiang2019accelerating} performs aggressive pruning and quantised scoring on the GPU, while delegating the final exact inner-product evaluation to the CPU when datasets exceed GPU memory capacity. On the other hand, algorithms designed for cooperative multi-GPU workloads target scalability at an industrial scale, distributing data or computation across devices to handle massive datasets \cite{johnson2019billion,kato2012multi,groh2022ggnn}.
+Beyond the conventional use of a single GPU for ANNS acceleration, several works explore more unconventional GPU-based strategies. Hybrid CPU–GPU approaches partition computation across hardware units to leverage the strengths of both processors in tandem \cite{xiang2019accelerating,tian2024fusionanns}. For instance, GAIPS \cite{xiang2019accelerating} performs aggressive pruning and quantised scoring on the GPU, while delegating the final exact inner-product evaluation to the CPU when datasets exceed GPU memory capacity. On the other hand, algorithms designed for cooperative multi-GPU workloads target scalability at an industrial scale, distributing data or computation across several devices to handle massive datasets \cite{johnson2019billion,kato2012multi,groh2022ggnn}.
 
-% \subsubsection{CSR Bucket Format}
-
-% As discussed above, buckets from all repeats are stored contiguously in GPU memory in a CSR format. This is done so that the bucket index is easy to handle with GPU libraries and kernels which are heavily based on number-based indexing of contiguously stored data structures. This is composed of three arrays: $buckets$, $starts$ and $sizes$. $buckets$ has a length equal to the total number of points in all buckets after the CPU max-heap keeps only the top points per bucket. Conversely $starts$ and $sizes$ both have fixed lengths $L \cdot 4D^2$.
-
-% Take an bucket with index $\tau = i \cdot 4D^2 + j$, where $i$ is the repeat index, and $j$ is the local index of a bucket within a repeat. The start index and size of the $\tau$th bucket are thus $starts[\tau]$ and $sizes[\tau]$ respectively. The contents of this bucket are then stored at:
-
-% \begin{equation}
-%     buckets[starts[\tau]], buckets[starts[\tau]+1], buckets[starts[\tau]+2] \dots buckets[starts[\tau]+sizes[\tau]-1]
-% \end{equation}
-
-% \begin{table}[]
-%     \centering
-%     \begin{tabular}{c|c}
-%          $m$ & max bucket size  \\
-%          $D$ & number of random projections for the $U$ and $V$ matrices \\
-%          $p$ & the number of probes per dataset point, per repeat \\ 
-%          $L$ & the number of hash tables (repeats) to perform
-%     \end{tabular}
-%     \caption{Indexing parameters for \cf. For brevity, we use slightly different naming convention to the original \fpp paper}
-%     \label{tab:placeholder}
-% \end{table}
+\newpage
 
 \section{\cf}
 
-\cf is a GPU-accelerated adaptation of \fpp. It implements essentially the same processes; however, several key modifications are introduced to better align with GPU execution constraints. We will briefly motivate why we chose to adapt \fpp for the GPU. Following this, we describe how \cf indexing and querying are implemented in practice. Additionally, whereas \fpp only supported angular distance, we describe a natural progression that allows \cf to also support inner-product similarity. 
+\cf is a GPU-accelerated adaptation of \fpp. It implements essentially the same processes; however, several key modifications are introduced to better align with GPU execution constraints. We will briefly motivate why we chose to adapt \fpp for the GPU. Following this, we describe how \cf indexing and querying are implemented in practice. Additionally, whereas \fpp only supported angular distance, we describe a natural progression that allows \cf also to support inner-product similarity. 
 
 \paragraph{Motivating \cf.}
 
-Besides the well-established success of numerous GPU-accelerated ANNS methods, we highlight key reasons supporting the suitability of \fpp for GPU acceleration. 
+Besides the well-established success of numerous GPU-accelerated ANNS methods, we highlight key reasons supporting the suitability of \fpp for GPU acceleration:
 
 \begin{enumerate}
-    \item \fpp achieves better query performance than baseline Falconn at equivalent index size. This is notable because Falconn is derived from an LSH family with asymptotically optimal indexing space for \crNN. Despite this theoretical optimality, \fpp delivers stronger practical performance on the more relevant $k$ANNS task while operating under the same memory budget. Consequently, within the broader family of LSH-based ANNS algorithms, \fpp's memory efficiency makes it a strong candidate for GPU adaptation, where memory capacity is typically more limited than on comparably priced CPU systems.
+    \item Pham et al. showed that \fpp achieves better query performance than the baseline Falconn at equivalent index size for $k$ANNS. This is notable because Falconn has an asymptotically optimal indexing space for LSH-based \crNN. However, with the addition of filtering mechanisms inspired by LSF, \fpp can practically beat Falconn in $ k$ANNS applications. Consequently, within the broader family of LSH-based ANNS algorithms, \fpp's memory efficiency against the theoretically optimal Falconn makes it a strong LSH-based candidate for GPU adaptation, where memory capacity is typically more limited than comparably priced CPU hardware.
 
-    \item \fpp offers substantial opportunities for parallelism, especially in the inner product computations underpinning both hashing and distance evaluation. While inner products define the hashing mechanism (e.g.\ $\dotxr$ or $\dotqr$), the dominant computational burden during querying arises from finding $\dotqx$ for each query candidate. Crucially, these largely independent inner product computations can be expressed as matrix multiplications, a workload pattern for which GPUs excel relative to CPUs~\cite{huang2019gpu}. In addition, query-level parallelism is inherent: queries within a batch are independent and can therefore be executed concurrently, further aligning \fpp with GPU execution models.
+    \item \fpp offers substantial opportunities for parallelism, especially in the inner product computations underpinning both hashing and distance evaluation. While inner products define the hashing mechanism (e.g.\ $\dotxr$ or $\dotqr$), Falconn\texttt{++}'s dominant computational burden during querying arises from finding $\dotqx$ for each query candidate \cite{pham2022falconn++}. Crucially, these largely independent inner product computations can be expressed as matrix multiplications, a workload pattern for which GPUs excel relative to CPUs~\cite{huang2019gpu}. In addition, query-level parallelism is inherent: queries within a batch are independent and can therefore be executed concurrently, further aligning \fpp with GPU execution models.
 \end{enumerate}
 
 \subsection{\cf Indexing}
 
-The \cf indexing approach is a \emph{hybrid} CPU-GPU approach by using both processors. It largely follows the same indexing process as \fpp, meaning it constructs an LSF-inspired index using $L$ repeats of the Falconn hashing process with a $l=2$ layer hash function. However, there are a few key nuances of \cf that make it more than just accelerating \fpp with a GPU - we will briefly describe notable details behind \cf's indexing. Algorithm~\ref{alg:cfIndexing} provides pseudo-code for the indexing process.
+The \cf indexing approach is a \emph{hybrid} CPU-GPU approach by using both processors. It essentially follows the same indexing process as \fpp, meaning it constructs an LSF-inspired index using $L$ repeats of the Falconn hashing process with an $l=2$ layer hash function. However, there are a few key nuances of \cf that make it more than just accelerating \fpp with a GPU - we will briefly describe notable details behind \cf's indexing. Algorithm~\ref{alg:cfIndexing} provides pseudo-code for the indexing process.
 
 \paragraph{Using a fixed max bucket size.}
 
-The main difference between \cf and \fpp indexing is that we remove the bucket scaling parameter $\alpha$. Instead, we set a maximum bucket size by keeping at most the top-$m$ scoring points per bucket. This has several advantages. Firstly, $m$ is more interpretable than $\alpha$. In the original \fpp formulation, $\alpha$ is tested with small fractional values (e.g., $0.1$ or $0.01$), whose practical effect on bucket occupancy is indirect. By contrast, $m$ directly specifies the maximum number of points per bucket, providing clearer control. Secondly, a fixed bucket size $m$ allows selecting $m$ that is well suited to GPU execution, such as powers of two. While CUDA does not require power-of-two dimensions, such choices often improve warp-level efficiency and simplify scheduling. For example, when gathering query candidates, setting $m=8$ allows a single warp (32 threads) to process $32/8 = 4$ buckets concurrently, increasing compute and memory throughput. 
+The main difference between \cf and \fpp indexing is that we remove the bucket scaling parameter $\alpha$. Instead, we set a maximum bucket size by keeping at most the top-$m$ scoring points per bucket. This has several advantages. Firstly, $m$ is more interpretable than $\alpha$. In the original \fpp formulation, $\alpha$ is tested with small fractional values (e.g., $0.1$ or $0.01$), whose practical effect on bucket occupancy is indirect. By contrast, $m$ directly specifies the maximum number of points per bucket, providing clearer control. Much like taking the top-$\max(k, \alpha b / \ip)$ points per bucket, taking the top-$m$ points can be seen as selecting a unique threshold $t_i$ per bucket. 
+
+Secondly, a fixed bucket size $m$ allows selecting $m$ that is well suited to GPU execution, such as powers of two. While CUDA does not require power-of-two dimensions, such choices often improve warp-level efficiency and simplify scheduling. For example, when gathering query candidates, setting $m=8$ allows a single warp (32 threads) to process up to $32$ candidates from $32/8 = 4$ buckets concurrently, increasing compute and memory throughput. 
 
 \paragraph{Hybrid CPU-GPU indexing.}
 
-As stated, \cf uses a hybrid CPU-GPU approach to simplify bucket filling. While most of the indexing is completed on the GPU, the actual process of probing and ranking points within buckets is done entirely on the CPU. This is done by implementing each bucket as a size-$m$ CPU heap. Data transfers between the CPU and GPU are done using \emph{pinned} memory, which can significantly increase in-memory transfers in both directions \cite{pytorch_pinmem_nonblock}. This choice also simplifies the algorithm: a CPU-resident bounded heap provides a direct and reliable mechanism for enforcing the per-bucket top-$m$ constraint, while avoiding the additional complexity introduced by highly irregular and contention-heavy per-bucket updates on the GPU. Although a fully GPU-resident alternative (e.g. segmented top-$m$ selection) is feasible, it would reasonably require intricate synchronisation patterns and memory management.
+As stated, \cf uses a hybrid CPU-GPU approach to simplify bucket filling. While most of the indexing is completed on the GPU, the actual probing and ranking of points within buckets is performed entirely on the CPU. This is done by implementing each bucket as a size-$m$ CPU heap. Data transfers between the CPU and GPU are done using \emph{pinned} memory, which can significantly increase in-memory transfers in both directions \cite{pytorch_pinmem_nonblock}. A CPU-resident bounded heap also simplifies indexing: it provides a direct and reliable mechanism for enforcing the per-bucket top-$m$ constraint, while avoiding the additional complexity introduced by highly irregular and contention-heavy per-bucket updates on the GPU. Although a fully GPU-resident alternative is feasible, it would reasonably require intricate synchronisation patterns and memory management.
 
 \paragraph{Storing data with tensors.}
 
@@ -919,7 +938,7 @@ Since GPUs are primarily designed for operations involving large-scale arrays an
 
             \\
             
-            \For{For $L$ repeats} \Comment{Repeats processed sequentially to reduce GPU memory load}
+            \For{$L$ repeats} \Comment{Repeats processed sequentially to reduce GPU memory load}
                 \State $\bXpR \gets \bX\bR$ \Comment{Matrix multiplication} 
                 \State $\bXpS \gets \bX\bS$
                 
@@ -949,27 +968,35 @@ Since GPUs are primarily designed for operations involving large-scale arrays an
 
 In contrast to indexing, CuFalconn's querying is performed \emph{entirely} on the GPU. Much like \fpp, the querying process is decomposed into a few key stages: repeatedly hash the query to find the nearest buckets across $L$ repeats, gather candidates from these buckets, then perform distance computations of these candidates to find the closest $k$ points. We will briefly describe key nuances of how \cf's querying is implemented.
 
-\paragraph{Ranking Buckets.} The query hashing process is largely the same as \fpp, for two sets of random vectors, we find the top-scoring buckets to provide candidate points. However, the selection process is slightly different. To narrow the search of the top buckets for 
-each query $\bq$, we introduce the internal parameter $\sz$. Then we consider only the $\sz$ random vectors closest to $\bq$ per layer per repeat, and combine these to obtain a selection of $\sz^2$ buckets per repeat. To then find the $\qp$ closest buckets to a query, we limit our search to the $L \sz^2$ gathered buckets across all repeats. Heuristically, we set $\sz = \lceil \sqrt{\qp / L} \rceil$. This ensures $qProbes \leq L \sz^2$, such that there is at least $\qp$ buckets considered for ranking. This design choice is motivated by practicality. Identifying the exact nearest buckets for a query would require evaluating all pairwise combinations of directions within each repeat, amounting to $4D^2$  bucket-score sums per repeat. For large $D$ and $n_q$, this becomes computationally excessive, even on modern GPUs. Limiting our search to the combinations of $\sz$ closest random vectors per layer, per repeat, narrows this search greatly. For a typical indexing and querying configuration of \cf (see Sec.\ref{sec:experiment}), $\sz \ll 2D$, so far fewer pair-wise sums need to be computed. Strictly speaking, this heuristic may miss out on nearby buckets to $\bq$ - consider the case where a bucket not formed by the $\sz^2$ considered in a repeat is still one of the top-$qProbes$ buckets across all repeats. However, for $L$ large enough, this effect can be mitigated, as missed candidates in a passed bucket of one repeat can instead be found in another repeat. 
+As is familiar with ANNS applications, we assume that queries are processed in batches. To this end, consider a collection of $n_q$ queries stored in a tensor $\bQ \in \Real^{n_q \times d}$, where queries are stored in row-major order. Algorithm~\ref{alg:cfQuerying} provides an overview of CuFalconn's querying process.
+
+\paragraph{Ranking Buckets.} The query hashing process is largely the same as \fpp, for two sets of random vectors, we find the top-scoring buckets to provide candidate points. However, the selection process differs slightly. To narrow the search of the top buckets for 
+each query $\bq$, we introduce an internal parameter $\sz$. Then we consider only the $\sz$ random vectors closest to $\bq$ per layer per repeat, and combine these to obtain a selection of $\sz^2$ buckets per repeat. To then find the $\qp$ closest buckets to a query, we limit our search to the $L \sz^2$ gathered buckets across all repeats. Heuristically, we set $\sz = \lceil \sqrt{\qp / L} \rceil$. This ensures $qProbes \leq L \sz^2$, such that there is at least $\qp$ buckets considered for ranking. This design choice is motivated by practicality. Identifying the exact nearest buckets for a query would require evaluating all pair-wise combinations of directions per layer within each repeat, amounting to $4D^2$ pair-wise bucket-score sums per repeat. For large $D$ and $n_q$, this becomes computationally excessive, even on modern GPUs. Limiting our search to the combinations of $\sz$ closest random vectors per layer, per repeat, narrows this search greatly. For a typical indexing and querying configuration of \cf (see Sec.~\ref{sec:experiment}), $\sz \ll 2D$, so far fewer pair-wise sums need to be computed. Strictly speaking, this heuristic may miss out on nearby buckets to $\bq$ - consider the case where a bucket not formed by the $\sz^2$ considered in a repeat is still one of the top-$qProbes$ buckets across all repeats. However, for $L$ large enough, this effect can be mitigated, as missed candidates in a passed bucket of one repeat can instead be found in another repeat. 
 
 Besides this added nuance of selecting the closest buckets to a query, the querying process of \cf is functionally the same as \fpp. However, of course, it is implemented to use a GPU instead of a CPU. We will briefly describe the essential GPU-specific processes underpinning querying. 
 
 \paragraph{Collecting candidates.} 
 
-The hashing and selection of the top buckets per query is relatively straightforward, so we will jump to how candidates are collected post top-bucket ranking. This stage is completed using a custom CUDA kernel. Essentially, this collects candidates from a close bucket using a scattered-gather pattern across all close buckets. With this approach, using a max bucket size of $m$, which is a power of $2$, is advantageous for performance. If $m \leq 32$, then exactly $32/m$ buckets can be processed per warp; otherwise, it uses $m/32$ warps to collect the candidates from one bucket. A \emph{variable} max bucket size introduced by the scaling parameter $\alpha$ of \fpp, would be more computationally intensive - requiring more pre-processing and data-staging before launching a gather kernel. Besides decreasing index memory size, this is another benefit of using a fixed bucket size. Due to memory constraints, candidates are not gathered as full $d$-dimensional vectors; instead, we store a $32$-bit integer that references the candidate's index within $X$. 
+The hashing and selection of the top buckets per query is relatively straightforward, so we will jump to how candidates are collected post top-bucket ranking. This stage is completed using a custom CUDA kernel. Essentially, this collects candidates from a close bucket using a scattered-gather pattern across all close buckets. With this approach, using a max bucket size of $m$, which is a power of $2$, is advantageous for performance. Assuming one candidate is gathered per thread, if $m \leq 32$, then exactly $32/m$ buckets can be processed per warp; otherwise, it uses $m/32$ warps to collect the candidates from one bucket. A \emph{variable} max bucket size introduced by the scaling parameter $\alpha$ of \fpp, would be more computationally intensive - requiring more pre-processing and data-staging before launching a gather kernel. Besides decreasing index memory size, this is another benefit of using a fixed bucket size. Due to memory constraints, candidates are not gathered as full $d$-dimensional vectors; instead, we store a $32$-bit integer that references the candidate's index within $X$. 
 
 \paragraph{Calculating candidate distances.}
 
-Once candidate indices are gathered, the inner products (distances) between the query and its candidates can be computed. This is done using a custom CUDA kernel that performs a warp-wide multiply-reduce pattern across $d$ dimensions (see \cite{harris2007optimizing}). Essentially, a single warp is dedicated to finding the inner product between a query and a group of 32 of its candidates. Inner products are computed sequentially, but cooperatively across all lanes in a warp. Once all 32 inner products are found, they are copied from register memory to global memory in a coalesced manner. Alternative designs, including a naive per-thread accumulation for-loop and assigning more than 32 candidates per warp, were evaluated, but yielded inferior performance; empirical results consistently favoured the aforementioned approach. 
+Once candidate indices are gathered, the inner products (distances) between the query and its candidates can be computed. This is done using a custom CUDA kernel that performs a warp-wide multiply-reduce pattern across $d$ dimensions \cite{harris2007optimizing}. Essentially, a single warp is dedicated to finding the inner product between a query and a group of 32 of its candidates. Inner products are computed sequentially, but cooperatively across all lanes in a warp. Once all 32 inner products are found, they are copied from register memory to global memory in a coalesced manner. Alternative designs, including a naive per-thread accumulation for-loop and assigning more than 32 candidates per warp were evaluated, but yielded inferior performance; empirical results consistently favoured the aforementioned approach. 
 
 \paragraph{Ranking distances.} 
 
-For a batch of queries, inner products are stored in a large flat jagged array. Where for a query $q$ with a variable $n_c$ number of candidates, the inner products with its query are stored in a segment of $n_c$ length. The top-$k$ candidates for each query are selected using a top-$k$ select kernel, which is a modification of \fgpu's \cite{johnson2019billion} \ws - which Johnson et al. showed to have demonstrably superior performance than rival top-$k$ GPU select algorithms. \ws was modified to handle top-$k$ selection over variable-length segments for inner products with queries and their candidates. The top-$k$ candidates per query are then returned to answer $k$ANNS.
+For a batch of queries, inner products are stored in a large flat jagged array. Given a query $q$ with a variable $n_c$ number of candidates, the inner products with its query are stored in a segment of $n_c$ length. The top-$k$ candidates for each query are selected using a custom top-$k$ select kernel, which is a modification of \fgpu's \ws. We chose \ws as Johnson et al. showed it to have demonstrably superior performance than rival top-$k$ GPU select algorithms \cite{johnson2019billion}. \ws was modified to handle top-$k$ selection over the variable-length segments containing the inner products between a query and its candidates. The top-$k$ candidates per query are then returned to answer $k$ANNS.
 
-As is familiar with ANNS applications, we assume that queries are processed in batches. To this end, consider a collection of $n_q$ queries stored in a tensor $\bQ \in \Real^{n_q \times d}$, where queries are stored in row-major order. 
+\subsection{Extension to Inner Product Distance}
+
+The original \fpp was designed for angular distance by maximising inner product similarity strictly on the unit sphere. We extend \cf to directly support inner-product similarity for \emph{any} two vectors in $\Rd$ without restriction of their L2 norm. This extension is inspired by the \textit{CEOs} family of ANNS algorithms, which are mainly based on the CEOs property (Sec.~\ref{sec:ceos}), and use general inner product similarity \cite{pham2021simple}.
+
+At a high level, \textit{CEOs} indexing consists of projecting the dataset points onto a set of Gaussian random directions and storing the top-$m$ dataset points per random direction. Querying follows an analogous pattern: the query is projected onto the same directions, the top-$s$ directions are selected, and a candidate set is formed from the union of the stored top-ranked points associated with these directions. A practical limitation of this approach is that achieving strong retrieval performance typically requires very large indices.
+
+\cf bears a strong resemblance to this general strategy and may be viewed as a simplified variant. Instead of storing the global top-$m$ vectors for every projection direction, each direction retains only points for which it is among their top-$iProbes$ most significant directions. This modification substantially reduces indexing space while preserving excellent querying performance. For example, to attain high query accuracy on the GIST dataset - excluding dataset size - \textit{CEOs} requires index sizes on the order of GBs \cite{pham2021simple}, while \cf can achieve similar results with a few MBs (see Tab.~\ref{tab:gist-imagenet-indexing} in Sec.~\ref{sec:experiment}).
 
 \begin{algorithm}
-	\caption{\cf Querying (GPU)}
+	\caption{\cf Querying}
 	\label{alg:cfQuerying} 									
 	\begin{algorithmic}[1]
 		\Procedure{Querying}{$\bX, \bQ, \bR, \bS, L, \qp, \sz, k$}
@@ -980,7 +1007,7 @@ As is familiar with ANNS applications, we assume that queries are processed in b
             \\ 
             \State For each query, select top-$\sz$ directions from $\bR$ and $\bS$ per repeat
             \State Combine the top-$\sz$ directions per repeat and find their scores
-            \State For each query find the top-$\qp$ buckets out $L \cdot \sz^2$ prospective buckets
+            \State For each query find the top-$\qp$ buckets out $L \sz^2$ prospective buckets
             \\ 
             \State Collect candidates' indices from selected buckets for each query
 
@@ -996,18 +1023,10 @@ As is familiar with ANNS applications, we assume that queries are processed in b
 	\end{algorithmic}
 \end{algorithm}
 
-\subsection{Extension to Inner Product Distance}
-
-The original \fpp was designed for angular distance, where similarity is maximised via inner products on the unit sphere. We extend \cf to directly support inner-product distance. This extension is inspired by the \textit{CEOs} family of algorithms \cite{pham2021simple}, which are mainly based on the CEOs property in \ref{sec:ceos}.
-
-At a high level, \textit{CEOs} indexing consists of projecting the dataset points onto a set of Gaussian random directions and storing the top-$m$ dataset points per projection direction. Querying follows an analogous pattern: the query is projected onto the same directions, the top-$s$ directions are selected, and a candidate set is formed from the union of the stored top-ranked points associated with these directions. A practical limitation of this approach is that achieving strong retrieval performance typically requires very large indices.
-
-\cf bears a strong resemblance to this general strategy and may be viewed as a simplified variant. Instead of storing the global top-$m$ vectors for every projection direction, each direction retains only points for which it is among their top-$iProbes$ most significant directions. This modification substantially reduces indexing space while preserving excellent querying performance. For example, to attain high query accuracy on the GIST dataset - excluding dataset size - \textit{CEOs} requires index sizes on the order of GBs \cite{pham2021simple}, while \cf can achieve similar results with a few MBs (see Tab.~\ref{tab:gist-imagenet-indexing} in \hyperref[sec:experiment]{Experiment}). 
-
 \section{Experiment}
 \label{sec:experiment}
 
-\cf is evaluated across several real-world datasets to demonstrate its practical applicability for the $k$ANNS problem. We analyse its performance for both querying and indexing against competitor algorithms. Additionally, we conduct ablation studies on the roles of $m$, $D$ and $L$ to unpack the behaviour of \cf further. Consequently, we draw these key conclusions from experimentation:
+\cf is evaluated across several real-world datasets to demonstrate its practical applicability for $k$ANNS. We analyse its performance for both querying and indexing against competitor algorithms. Additionally, we conduct ablation studies on the roles of $m$, $D$ and $L$ to unpack the behaviour of \cf further. Consequently, we draw these key conclusions from experimentation:
 
 \begin{itemize}
     \item \cf exhibits robust and reliable performance on large modern datasets including \gist, \imgnt, \ymlm and \glv.
@@ -1021,14 +1040,14 @@ At a high level, \textit{CEOs} indexing consists of projecting the dataset point
 
 \paragraph{Datasets.} 
 
-We choose 4 large-dimensional datasets for evaluation: GIST, ImageNet, Yahoo-minilm and Glove-100. Each dataset is accompanied by a set of queries for evaluating query performance. For GloVe-100 and ImageNet, we randomly select 1000 queries from the dataset; likewise for GIST, but with 10,000 chosen. 
-With Yahoo-minilm, we use the set of 10,000 queries provided by VIBE \cite{jaasaari2025vibe}. For angular distance, we preprocess the dataset points to be unit-normalised. Table.~\ref{tab:datasets} includes detailed information on the datasets chosen.
+We choose 4 large-dimensional datasets for evaluation: GIST, ImageNet, Yahoo-minilm and GloVe-100. Each dataset is accompanied by a set of queries to evaluate query performance. For GloVe-100 and ImageNet, we randomly select 1000 queries from the dataset; likewise for GIST, but with 10,000 chosen. With Yahoo-minilm, we use a set of 10,000 queries provided by VIBE \cite{jaasaari2025vibe}. 
+GIST and ImageNet use inner product similarity (IP), while \glv and \ymlm use angular distance. When using angular distance, we preprocess the dataset points to be unit-normalised. Table.~\ref{tab:datasets} includes detailed information on the datasets chosen.
 
 \paragraph{Competitor algorithms.} 
 
 We compare \cf to two rival algorithms. The first is the IVF-based GpuIndexIVFFlat index type from the FAISS GPU library \cite{douze2025faiss}. We do not compare to other FAISS index types, including \textit{GpuIndexFlatIP}, because this is for an exact Nearest Neighbour Search, nor do we compare to \textit{GpuIndexIVFPQ} because this uses vector quantisation to find non-exact distances between queries and candidates, which can, in turn, reduce recall. For brevity throughout experimentation, we refer to the \textit{GpuIndexFlatIP} FAISS implementation as simply \fgpu. \fgpu was chosen as it is arguably the SOTA for GPU-accelerated $k$ANNS. It has excellent index build times and memory usage, along with robust querying performance on a variety of datasets~\cite{aumuller2020ann}. 
 
-The second baseline is \mfpp, a variant of the CPU-based \fpp using a fixed max bucket size of $m$ instead of the scaling parameter $\alpha$ \cite{CEOs_GitHub}. \mfpp also uses identical indexing and querying heuristics as \cf - for example, the usage of $\sz$ when querying. Consequently, since \mfpp and \cf use the same underlying algorithm, they can be compared with identical indexing and query parameters. This comparison thus provides insight into the behaviour of \cf relative to a fully CPU-resident implementation. We run \mfpp with 64 threads.
+The second baseline is mFalconn\texttt{++}, a variant of the CPU-based \fpp using a fixed max bucket size of $m$ instead of the scaling parameter $\alpha$ \cite{CEOs_GitHub}. mFalconn\texttt{++} also uses identical indexing and querying heuristics as \cf, for example, the usage of $\sz$ when querying. Consequently, since mFalconn\texttt{++} and \cf use the same underlying algorithm, they can be compared with identical indexing and query parameters. This comparison thus provides insight into the behaviour of \cf relative to a fully CPU-resident implementation. We run mFalconn\texttt{++} with 64 threads.
 
 \paragraph{Evaluation.} 
 
@@ -1064,19 +1083,19 @@ Across all datasets, for simplicity of analysis, we set $m=8$ and $iProbes=4$. W
     \item \textbf{\glv and \ymlm}: All combinations of $D$ and $L$ from the set $\{128, 192, 256, 392\}$. We then choose $qProbes$ from the set of all powers of two between $8$ and $32768$.
 \end{itemize}
 
-The choice of parameters for each dataset was motivated by the corresponding performance of \cf compared to \fgpu (see Sec.~\ref{sec:faiss-compare}). For GIST and \imgnt, we found that we could set $L$ and $D$ relatively small, and still get excellent results compared to \fgpu. On GIST, we found we could use smaller $qProbes$ than on ImageNet and still achieve near-perfect recall. On \glv and \ymlm, we elected to do a sweep of combinations of $(D, L)$ to have a fair comparison to \fgpu. These two datasets require relatively larger $D$ and $L$ than GIST and ImageNet to achieve querying performance at least comparable to \fgpu.
+The choice of parameters for each dataset was motivated by the corresponding performance of \cf compared to \fgpu (see Sec.~\ref{sec:faiss-compare}). For GIST and \imgnt, we found that we could set $L$ and $D$ relatively small, and still get excellent results compared to \fgpu. On GIST, we found we could use smaller $qProbes$ than on ImageNet and still achieve near-perfect recall. For \glv and \ymlm, we performed a sweep over $(D, L)$ to ensure a fair comparison with \fgpu, since these datasets require relatively larger indices to achieve comparable query performance.
 
 \subsubsection{Results}
 
 \paragraph{GIST and ImageNet.} 
 
-Both the indexing and querying results on GIST were excellent. The index took $2.3$s to create, with an additional $2.3$MB of space on top of the dataset itself, which is arguably negligible given that GIST takes $3.38$GB to store. Querying achieved speeds near $10^6$ for recall values of $0.85$, despite the large dimensionality of GIST. ImageNet indexing took $6.9s$, with an additional space of $44.4$ - again largely irrelevant compared to the size of ImageNet. Querying speed on ImageNet was strong compared to competitors. We summarise the indexing results for GIST and ImageNet in Tab.~\ref{tab:gist-imagenet-indexing}, additionally, querying performance is shown in Figs.~\ref{fig:gist-query} \& \ref{fig:imagenet-query}.
+Both the indexing and querying results on GIST were excellent. The index took $2.3$s to create, with an additional $2.3$MB of space on top of the dataset itself, which is arguably negligible given that GIST takes $3.38$GB to store. Querying achieved speeds near $10^6$ QPS for recall values of $0.85$, despite the large dimensionality of GIST. ImageNet indexing took $6.9s$, with an additional space of $44.4$MB - again largely irrelevant compared to the size of ImageNet. Querying speed on ImageNet was strong compared to competitors. We summarise the indexing results for GIST and ImageNet in Tab.~\ref{tab:gist-imagenet-indexing}, additionally, querying performance is shown in Figs.~\ref{fig:gist-query} \& \ref{fig:imagenet-query}.
 
 \paragraph{\glv and \ymlm.} 
 
-Compared with GIST and ImageNet on inner-product distance, \cf was more challenged on \glv and \ymlm with angular distance. We report the recall vs QPS plots in Figs.~\ref{fig:glove-query} \& \ref{fig:yahoo-query}. To then create the recall vs QPS plots, as is standard for ANNS benchmarking, we present the \emph{dominating} points in terms of recall and QPS. For any indexing and querying configuration, we connect only the points where no other point has both higher recall and QPS. For disambiguation, we call these dominating results the \emph{Pareto Frontier}. The produced plots are strikingly similar, with comparable querying speeds for any given recall. For both datasets, we achieved recall values near perfect, with a QPS of $\approx 10^4$.
+Compared with GIST and ImageNet on inner-product distance, \cf was more challenged on \glv and \ymlm. We report the recall vs QPS plots in Figs.~\ref{fig:glove-query} \& \ref{fig:yahoo-query}. To then create the recall vs QPS plots, as is standard for ANNS benchmarking, we present the \emph{dominating} points in terms of recall and QPS. For any indexing and querying configuration, we connect only the points where no other point has both higher recall and QPS. These dominating results are also known as the \emph{Pareto Frontier}. The produced plots are strikingly similar, with comparable querying speeds for any given recall. For both datasets, we achieved recall values near perfect, at a QPS of $\approx 10^4$.
 
-We plot the indexing space and time for \ymlm varying $D$, and plotting lines for each group of $L$ values in Fig.\ref{fig:index-perf-glove-yahoo}. For brevity, we do not show the inverse plots with $L$ on the $x$-axis and lines for each $D$, as this relationship is very similar. We report indexing performance of \glv in Tab.~\ref{tab:index-compare-DL}. A general conclusion from these results is that index build time and space linearly increases in-terms $D$ and $L$ for both \glv and \ymlm. Another observation is that the indices can grow considerably large. For example, on \ymlm, the index size for $D=L=392$ was nearly $6GB$, however, this is an extreme case, for $D = L = 128$, this was $\approx 0.75GB$ (See Fig.~\ref{fig:yahoo-index-size}). We should note that large indices do not necessarily achieve out-sized gains in query performance; we reserve an in-depth discussion of the role of $D$ and $L$ for Sec.~\ref{sec:DL-ablation}.
+We plot the indexing space and time for \ymlm varying $D$, and plotting lines for each group of $L$ values in Fig.~\ref{fig:index-perf-glove-yahoo}. For brevity, we do not show the inverse plots with $L$ on the $x$-axis and lines for each $D$, as this relationship is very similar. We report indexing performance of \glv in Tab.~\ref{tab:index-compare-DL} (Sec.~\ref{sec:DL-ablation}). A general conclusion from these results is that index build time and space linearly increases in-terms $D$ and $L$ for both \glv and \ymlm. Another observation is that the indices can grow considerably large. For example, on \ymlm, the index size for $D=L=392$ was nearly $6GB$, however, this is an extreme case, for $D = L = 128$, this was $\approx 0.75GB$ (See Fig.~\ref{fig:yahoo-index-size}). We should note that large indices do not necessarily achieve out-sized gains in query performance; we reserve an in-depth discussion of the role of $D$ and $L$ for Sec.~\ref{sec:DL-ablation}.
 
 \begin{figure}[t]
     \centering
@@ -1119,8 +1138,8 @@ We plot the indexing space and time for \ymlm varying $D$, and plotting lines fo
     \begin{tabular}{c|c|c|c|c|c|c}
          Dataset & $L$ & $D$ & $m$ & $iProbes$ & Build time (s) & Space (GB) \\
          \hline
-        \gist & 16 & 16 & 8 & 2 & $2.3$ & 3.58 \\ 
-        \imgnt & 64 & 64 & 8 & 2 & $6.9$ & 1.35 \\ 
+        \gist & 16 & 16 & 8 & 4 & $2.3$ & 3.58 \\ 
+        \imgnt & 64 & 64 & 8 & 4 & $6.9$ & 1.35 \\ 
     \end{tabular}
     \caption{Indexing performance of \cf for GIST and ImageNet}
     \label{tab:gist-imagenet-indexing}
@@ -1149,19 +1168,6 @@ We plot the indexing space and time for \ymlm varying $D$, and plotting lines fo
 
 \subsection{Ablation Study of $m$ on \glv}
 \label{sec:ablation-glove}
-
-We perform an ablation experiment using GloVe-100 on the role of the max bucket size $m$. For this experiment, we set $L = D = 128$ and $iProbes = 2$, as this configuration had the fastest build time (for $m$ = 8) among all configurations investigated for GloVe-100. We vary $m$ from the set $\{8, 16, 32, 64, 128\}$. For each $m$, we choose $qProbes$ over powers of two in the range $[8, 16384]$, and include intermediate half-step values to extend up to $24576$. More formally, we take $qProbes$ from the set $V_{qP}$ shown in Eq.~\ref{eq:set-V}. We then restrict attention to results attaining a recall of at least $0.75$.
-
-\begin{equation}
-    V_{qP} = \{\, 2^i \mid i = 3,\dots,14 \,\}
-    \;\cup\;
-    \left\{\, 3 \cdot 2^{i-1} \mid i = 3,\dots,14 \,\right\}.
-    \label{eq:set-V}
-\end{equation}
-
-Not surprisingly, as shown in Fig.~\ref{fig:index-size-ablation-m}, the index size generally increases with $m$ - in expectation, buckets contain more points. Another effect is that index build time is proportional to $m$, shown in Fig.~\ref{fig:index-time-ablation-m}. This is likely due to the non-trivial round-trip data transfer costs between the CPU and GPU being amplified by a larger index - more data needs to be transferred between the two processors.
-
-As shown in Fig.~\ref{fig:recall-qps-ablation-m}, larger buckets generally increase the speed of queries. This behaviour arises because larger buckets require fewer candidates per query to achieve high recall, as illustrated in Fig.~\ref{fig:recall-candidates-ablation-m}. For example, for a recall of $\approx 0.925$, $m = 8$ and $m=128$ can achieve this with approximately $97K$ and $27K$ candidates respectively - an almost $4$ fold difference. This effect is presumably caused by smaller buckets pruning out suitable candidates for a given query. Due to the probabilistic nature of LSH, the top points in the closest buckets to a query are only probabilistically close to a query. Consequently, bucket truncation due to a low $m$ can discard actual nearest neighbours to a query because of their low score priority in a bucket. We can conclude that increasing $m$ generally can improve the accuracy-speed trade-off of CuFalconn. However, this advantage comes at a clear cost: longer build times and a larger index size. 
 
 \begin{figure}[H]
     \begin{subfigure}{0.49\textwidth}
@@ -1198,16 +1204,29 @@ As shown in Fig.~\ref{fig:recall-qps-ablation-m}, larger buckets generally incre
     \label{fig:ablation-study-m}
 \end{figure}
 
-\subsection{Comparison to \mfpp}
+We perform an ablation experiment using GloVe-100 on the role of the max bucket size $m$. For this experiment, we set $L = D = 128$ and $iProbes = 4$, as this configuration had the fastest build time (for $m$ = 8) among all configurations investigated for GloVe-100 in Sec.~\ref{sec:dataset-perf}. We vary $m$ from the set $\{8, 16, 32, 64, 128\}$. For each $m$, we choose $qProbes$ over powers of two in the range $[8, 16384]$, and include intermediate half-step values to extend up to $24576$. More formally, we take $qProbes$ from the set $V_{qP}$ shown in Eq.~\ref{eq:set-V}. We then restrict attention to results attaining a recall of at least $0.75$.
+
+\begin{equation}
+    V_{qP} = \{\, 2^i \mid i = 3,\dots,14 \,\}
+    \;\cup\;
+    \left\{\, 3 \cdot 2^{i-1} \mid i = 3,\dots,14 \,\right\}.
+    \label{eq:set-V}
+\end{equation}
+
+Not surprisingly, as shown in Fig.~\ref{fig:index-size-ablation-m}, the index size generally increases with $m$ - in expectation, buckets contain more points. Another effect is that index build time is proportional to $m$, shown in Fig.~\ref{fig:index-time-ablation-m}. This is likely due to the non-trivial round-trip data transfer costs between the CPU and GPU being amplified by a larger index - more data needs to be transferred between the two processors.
+
+As shown in Fig.~\ref{fig:recall-qps-ablation-m}, larger buckets generally increase the speed of queries. This behaviour arises likely because larger buckets require fewer candidates per query to achieve high recall, as illustrated in Fig.~\ref{fig:recall-candidates-ablation-m}. For example, for a recall of $\approx 0.925$, $m = 8$ and $m=128$ can achieve this with approximately $97K$ and $27K$ candidates respectively - an almost $4$ fold difference. This effect is presumably caused by smaller buckets pruning out suitable candidates for a given query. Due to the probabilistic nature of LSH, the top points in the closest buckets to a query are only probabilistically close to a query. Consequently, bucket truncation due to a low $m$ can discard actual nearest neighbours to a query because of their low score priority in a bucket. We can conclude that increasing $m$ generally can improve the accuracy-speed trade-off of CuFalconn. However, this advantage comes at a clear cost: longer build times and a larger index size. 
+
+\subsection{Comparison to mFalconn\texttt{++}}
 \label{sec:faiss-compare}
 
-We compare the performance of \cf to \mfpp on all the datasets mentioned. Since they are equivalent algorithms, they can be run with identical parameters for both indexing and querying - allowing for a fair comparison. Consequently, we run \mfpp using the same parameters as \cf mentioned in Sec.~\ref{sec:dataset-perf}. 
+We compare the performance of \cf to mFalconn\texttt{++} on all the datasets mentioned. Since they are equivalent algorithms, they can be run with identical parameters for both indexing and querying - allowing for a fair comparison. Consequently, we run mFalconn\texttt{++} using the same parameters as \cf mentioned in Sec.~\ref{sec:exp-params}. 
 
-\paragraph{Querying performance.} \cf has markedly faster querying than \mfpp. As shown by Fig.~\ref{fig:query-perf}, on high recall regimes \cf is generally approximately a magnitude faster on all datasets. Another noticeable pattern is that \cf and \mfpp recall-QPS curves have similar trajectories, indicating that \cf offers a stable and near query constant speed-up over \mfpp. 
+\paragraph{Querying performance.} We plot the Pareto Frontier of mFalconn\texttt{++} alongside \cf in Fig.~\ref{fig:query-perf}. On high recall regimes \cf is markedly faster than mFalconn\texttt{++} - achieving approximately a magnitude faster querying on all datasets. Another noticeable pattern is that the recall-QPS curves for \cf and mFalconn\texttt{++} have similar trajectories, indicating that \cf offers a stable, near-constant querying speed-up over mFalconn\texttt{++}. 
 
-\paragraph{Indexing performance.} \cf offers consistently faster index build times than \mfpp. For GIST and ImageNet, we found that the build times were approximately twice as fast - see Tab.~\ref{tab:cf-csh-gist-imagenet-index-speedup}. On \glv and \ymlm, we compared the build times across the various combinations of $D$ and $L$ in \ref{sec:dataset-perf}. Figure \ref{fig:cf-csh-index-speed} shows the indexing build time speed-up of \glv to \ymlm for varied $D$ and $L$. Across both datasets, no consistent relationship emerges between $D$, $L$, and indexing speed-up. For example, on \glv, $D=128$ is dominated by other $D$ values for speed-up, but in \ymlm the opposite occurs.
+\paragraph{Indexing performance.} \cf offers consistently faster index build times than mFalconn\texttt{++}. For GIST and ImageNet, we found that the build times were approximately twice as fast - see Tab.~\ref{tab:cf-csh-gist-imagenet-index-speedup}. On \glv and \ymlm, we compared the build times across the various combinations of $D$ and $L$ in \ref{sec:dataset-perf}. Figure \ref{fig:cf-csh-index-speed} shows the indexing build time speed-up of \glv to \ymlm for varied $D$ and $L$. Across both datasets, no consistent relationship emerges between $D$, $L$, and indexing speed-up. For example, on \glv, $D=128$ is dominated by other $D$ values for speed-up, but in \ymlm the opposite occurs.
 
-Although \cf consistently outperforms \mfpp in indexing speed, the margin is smaller than one could expect. Given the substantially larger speed-ups observed during querying, one might expect indexing to exhibit comparable acceleration. Instead, the indexing improvements are noticeably more modest. Future work could therefore investigate further accelerating the indexing stage, potentially through a fully GPU-resident approach. We do not compare the indexing space of \mfpp to \cf, as they are practically identical in this respect because they implement the same underlying algorithm.
+Although \cf consistently outperforms mFalconn\texttt{++} in indexing speed, the margin is smaller than could be expected. Given the substantially larger speed-ups observed during querying, one might predict indexing to exhibit comparable acceleration. Instead, the indexing improvements are noticeably more modest. Future work could therefore investigate further accelerating the indexing stage, potentially through a fully GPU-resident approach. We do not compare the indexing space of mFalconn\texttt{++} to \cf, as they are practically identical in this respect because they implement the same underlying algorithm.
 
 \begin{figure}
     \centering
@@ -1225,25 +1244,25 @@ Although \cf consistently outperforms \mfpp in indexing speed, the margin is sma
         \caption{\ymlm}
     \end{subfigure}
 
-    \caption{Comparing the indexing time speed-up of \cf to \mfpp for different combinations of $D$ and $L$}
+    \caption{Comparing the indexing time speed-up of \cf to mFalconn\texttt{++} for different combinations of $D$ and $L$}
     \label{fig:cf-csh-index-speed}
 \end{figure}
 
 \begin{table}[H]
     \centering
     \begin{tabular}{c| lcc}
-         Dataset & \cf & \mfpp & Speedup \\ 
+         Dataset & \cf & mFalconn\texttt{++} & Speedup \\ 
          \hline
         GIST &  $2.3$s & $6.0$s &  $2.6 \times$ \\ 
         ImageNet & $6.9$s & $11.2$s & $1.6 \times $\\ 
     \end{tabular}   
-    \caption{Comparing indexing build times of \cf to \mfpp.}
+    \caption{Comparing indexing build times of \cf to mFalconn\texttt{++}.}
     \label{tab:cf-csh-gist-imagenet-index-speedup}
 \end{table}
 
 \subsection{Comparison to \fgpu}
 
-We compare to \fgpu using powers-of-two sweeps of $nList \in [256, 8192]$ and $nProbe \in [1, 1024]$. Larger $nList$ values produce finer partitions, in turn requiring larger $nProbe$ values to increase the number of candidates per query. This follows the protocol followed by ANN Benchmarks to evaluate FAISS-IVF methods ~\cite{aumuller2020ann}. Table~\ref{tab:faiss-params} lists all configurations run; note that results are only reported for configurations achieving high recall.
+We compare to \fgpu using powers-of-two sweeps of $nList \in [256, 8192]$ and $nProbe \in [1, 1024]$. Larger $nList$ values produce finer partitions, in turn requiring larger $nProbe$ values to increase the number of candidates per query. This follows the protocol followed by \textit{ANN Benchmarks} to evaluate FAISS-IVF methods ~\cite{aumuller2020ann}. Table~\ref{tab:faiss-params} lists all configurations run; note that results are only reported for configurations achieving high recall.
 
 \begin{table}[h]
     \centering
@@ -1261,9 +1280,9 @@ We compare to \fgpu using powers-of-two sweeps of $nList \in [256, 8192]$ and $n
     \label{tab:faiss-params}
 \end{table}
 
-We plot the Pareto Frontier of querying results for \fgpu on all 4 datasets in Fig.~\ref{fig:query-perf}. Using these results, we can see that the performance contrast between \cf and \fgpu varies across datasets. For GIST and ImageNet, \cf generally outperforms \fgpu - with a striking several orders of magnitude speed up on GIST. On ImageNet, \fgpu's recall doesn't exceed $0.9$, despite achieving recall well above this threshold on the other datasets with identical indexing and querying parameters. On \glv and \ymlm, the performance between \cf and \fgpu is more competitive. On \glv, \cf beats \fgpu for recalls larger than $\approx 0.9$, a similar effect exists for \ymlm but for recalls above $\approx 0.975$.
+We plot the Pareto Frontier of querying results for \fgpu on all 4 datasets in Fig.~\ref{fig:query-perf}. Using these results, we can see that the performance contrast between \cf and \fgpu varies across datasets. For GIST and ImageNet, \cf generally outperforms \fgpu~- with a striking several orders of magnitude speed up on GIST. On ImageNet, \fgpu's recall doesn't exceed $0.9$, despite achieving recall well above this threshold on the other datasets with identical indexing and querying parameters. On \glv and \ymlm, the performance between \cf and \fgpu is more competitive. On \glv, \cf beats \fgpu for recalls larger than $\approx 0.9$, a similar effect exists for \ymlm but for recalls above $\approx 0.975$.
 
-Another noticeable phenomenon is that generally \cf has more stable performance than \fgpu, particularly on \glv and \ymlm. The range of QPS values for \fpp on these datasets differs by more than a magnitude, whereas for \cf, the range is within $10^5$ and $10^4$.
+Another noticeable phenomenon is that generally \cf has more stable performance than \fgpu, particularly on \glv and \ymlm. The range of QPS values for \fpp on these datasets differs by more than a magnitude, whereas for \cf, the range is within $ 10^4$ and $ 10^5$.
 
 \subsection{Ablation study of $D$ and $L$ on \glv}
 \label{sec:DL-ablation}
@@ -1276,52 +1295,7 @@ We analyse the sensitivity of \cf to the parameters $D$ and $L$ on \glv. Through
 Set $D = 256$, and vary $L \in \{128, 192, 256, 392\}$.
 \end{itemize}
 
-For each $(D, L)$ configuration, we vary $qProbes$ over values in the set $V_{qP}$ shown in Eq.~\ref{eq:set-V} (see Sec.~\ref{sec:ablation-glove}). We then restrict attention to the combinations of indexing and querying configurations that achieve recall of at least $0.75$. A general takeaway from this study is that increasing $D$ or $L$ tends to improve index quality, but often at the expense of substantially larger index sizes and longer build times, without commensurate gains in query performance. We will briefly discuss indexing performance before delving into discussions on querying implications.
-
-\paragraph{Indexing build time and space.}
-
-We report the indexing build times and space of all $(D, L)$ combinations in Tab.~\ref{tab:index-compare-DL}. Index space and build times are approximately directly proportional to $D$ and $L$. i.e. increasing $D$ or $L$ by a factor increases build time/space by roughly this factor. A notable result is the apparent symmetry between build times and space when swapping values of $D$ and $L$. For example, $(D=256, L=192)$ has roughly the same indexing performance as $(D = 192, L = 256)$. We should note that the largest configuration $D=L=392$ has an index size nearly $8 \times$ the size of the \glv dataset itself.
-
-\begin{table}[H]
-    \centering
-
-    \begin{subtable}{0.48\textwidth}
-        \centering
-        \begin{tabular}{c cc}
-            $D$ & Build time (s) & Space (GB) \\
-            \hline
-            128 & 15.8 & 0.63 \\
-            192 & 21.4 & 1.26 \\
-            256 & 27.7 & 1.96 \\
-            392 & 45.5 & 3.47 \\
-        \end{tabular}
-        \caption{$L = 256$}
-    \end{subtable}
-    \hfill
-    \begin{subtable}{0.48\textwidth}
-        \centering
-        \begin{tabular}{c cc}
-            $L$ & Build time (s) & Space (GB) \\
-            \hline
-            128 & 15.8 & 0.98 \\
-            192 & 22.4 & 1.47 \\
-            256 & 27.7 & 1.96 \\
-            392 & 45.4 & 3.00 \\
-        \end{tabular}
-        \caption{$D = 256$}
-    \end{subtable}
-    
-    \caption{Indexing build time and space on \glv comparing fixed $L$ or $D$.}
-    \label{tab:index-compare-DL}
-\end{table}
-
-\paragraph{Recall and querying speed.} For a fixed $D$, we find no significant benefit in varying $L$. As shown by Fig.~\ref{fig:qps-recall-D-ablation-DL}, a larger $L$ generally leads to comparable or lower QPS for the same fixed recall. For recall values greater than $\approx 0.75$, there is little difference between choosing different $L$ values. However, for a fixed $L$, there are clear trade-offs between large and small $D$ values as shown in Fig.~\ref{fig:qps-recall-L-ablation-DL}. For a small $D$, \cf generally has faster QPS for recall less than $\approx 0.85$, but for very-high recalls around $0.95$, it is more appropriate to use a larger $D$. The order of the \emph{max} recall value that each $D$ curve has corresponds to the ordering of $D$, which indicates that for a fixed $L$, increasing $D$ can increase the maximum recall attained. 
-
-The mixed querying-speed behaviour observed as $D$ or $L$ increase on \glv suggests diminishing practical returns. Given the approximately linear growth in index build time and memory footprint, larger $D$ and $L$ configurations are difficult to justify given the modest and inconsistent querying benefits.
-
-\paragraph{Quality of candidates.} We found that increasing $D$ or $L$ can generally improve the quality of candidates found from the top buckets to a query. This is non-surprising; a larger $D$ or $L$ increases the diversity and selection of buckets to choose from, and thus makes it more likely that the top-scoring buckets contain close candidates to a query. This effect is shown in Figures \ref{fig:recall-candidates-fixed-D} and \ref{fig:recall-candidates-fixed-L} - generally, a higher $L$ or $D$ yields higher recall for the same number of candidates. Interestingly, it appears $D$ exhibits a more substantial effect on candidate quality than $L$ - there is a larger range in the curves from \ref{fig:recall-candidates-fixed-L} than \ref{fig:recall-candidates-fixed-D}. 
-
-\paragraph{Projections costs.} As expected, our study also revealed that using a larger $D$ or $L$ increases the relative cost of hashing compared to total time query time. To show this, we found the mean percentage of querying time spent completing hashing across all indexing and query configurations. For a fixed $L$, increasing $D$ from $128$ to $392$ increased this average percentage from $21\%$ to $59\%$ - a $38\%$ change. We found a similar effect for a fixed $D$ and varied $L$.
+For each $(D, L)$ configuration, we vary $qProbes$ over values in the set $V_{qP}$ shown in Eq.~\ref{eq:set-V} (see Sec.~\ref{sec:ablation-glove}). We then restrict attention to the combinations of indexing and querying configurations that achieve high recall. A general takeaway from this study is that increasing $D$ or $L$ tends to improve index quality, but often at the expense of substantially larger index sizes and longer build times, without commensurate gains in query performance. We will briefly discuss indexing performance before delving into discussions on querying implications.
 
 \begin{figure}[H]
     \begin{subfigure}{0.49\textwidth}
@@ -1363,6 +1337,51 @@ The mixed querying-speed behaviour observed as $D$ or $L$ increase on \glv sugge
     \label{fig:ablation-study-DL-candidates}
 \end{figure}
 
+\paragraph{Indexing build time and space.}
+
+We report the indexing build times and space of all $(D, L)$ combinations in Tab.~\ref{tab:index-compare-DL}. Index space and build times are approximately directly proportional to $D$ and $L$. i.e. increasing $D$ or $L$ by a factor increases build time/space by roughly this factor. A notable result is the apparent symmetry between build times when swapping values of $D$ and $L$. For example, $(D=256, L=192)$ has roughly the same build time as $(D = 192, L = 256)$. We should note that the largest configuration $D=L=392$ has an index size nearly $8 \times$ the size of the \glv dataset itself.
+
+\begin{table}[H]
+    \centering
+
+    \begin{subtable}{0.48\textwidth}
+        \centering
+        \begin{tabular}{c cc}
+            $D$ & Build time (s) & Space (GB) \\
+            \hline
+            128 & 15.8 & 0.63 \\
+            192 & 21.4 & 1.26 \\
+            256 & 27.7 & 1.96 \\
+            392 & 45.5 & 3.47 \\
+        \end{tabular}
+        \caption{$L = 256$}
+    \end{subtable}
+    \hfill
+    \begin{subtable}{0.48\textwidth}
+        \centering
+        \begin{tabular}{c cc}
+            $L$ & Build time (s) & Space (GB) \\
+            \hline
+            128 & 15.8 & 0.98 \\
+            192 & 22.4 & 1.47 \\
+            256 & 27.7 & 1.96 \\
+            392 & 45.4 & 3.00 \\
+        \end{tabular}
+        \caption{$D = 256$}
+    \end{subtable}
+    
+    \caption{Indexing build time and space on \glv comparing fixed $L$ or $D$.}
+    \label{tab:index-compare-DL}
+\end{table}
+
+\paragraph{Recall and querying speed.} For a fixed $D$, we find no significant benefit in varying $L$. As shown by Fig.~\ref{fig:qps-recall-D-ablation-DL}, a larger $L$ generally leads to comparable or lower QPS for the same fixed recall. However, for a fixed $L$, there are clear trade-offs between large and small $D$ values as shown in Fig.~\ref{fig:qps-recall-L-ablation-DL}. For a small $D$, \cf generally has faster QPS for recall less than $\approx 0.85$, but for very-high recalls around $0.95$, it is more appropriate to use a larger $D$. The order of the \emph{max} recall value that each $D$ curve has corresponds to the ordering of $D$, which indicates that for a fixed $L$, increasing $D$ can increase the maximum recall attained. 
+
+The mixed querying-speed behaviour observed as $D$ or $L$ increase on \glv suggests diminishing practical returns. Given the approximately linear growth in index build time and memory footprint, larger $D$ and $L$ configurations are difficult to justify given the modest and inconsistent querying benefits.
+
+\paragraph{Quality of candidates.} We found that increasing $D$ or $L$ can generally improve the quality of candidates found from the top buckets to a query. This is non-surprising; a larger $D$ or $L$ increases the diversity and selection of buckets to choose from, and thus makes it more likely that the top-scoring buckets contain close candidates to a query. This effect is shown in Figures \ref{fig:recall-candidates-fixed-D} and \ref{fig:recall-candidates-fixed-L} - generally, a higher $L$ or $D$ yields higher recall for the same number of candidates. Interestingly, it appears $D$ exhibits a more substantial effect on candidate quality than $L$ - there is a larger range in the curves in \ref{fig:recall-candidates-fixed-L} than \ref{fig:recall-candidates-fixed-D}. 
+
+\paragraph{Projections costs.} As expected, our study also revealed that using a larger $D$ or $L$ increases the relative cost of hashing compared to total time query time. To illustrate, we calculated the mean percentage of querying time spent completing hashing across all indexing and query configurations. For a fixed $L$, increasing $D$ from $128$ to $392$ increased this average percentage from $21\%$ to $59\%$ - a $38\%$ change. We found a similar effect for a fixed $D$ and varied $L$.
+
 % \begin{figure}
 %     % \begin{subfigure}{0.45\textwidth}
 %     %     \centering
@@ -1393,19 +1412,22 @@ The mixed querying-speed behaviour observed as $D$ or $L$ increase on \glv sugge
 
 % \alert{Can use profiling results to help paint a better picture}
 
-\newpage
-
 \section{Conclusions}
 
 This paper introduces \cf, a GPU-accelerated Locality Sensitive Filtering based ANNS algorithm. It is an adaptation of the CPU-implemented \fpp method, with key adjustments to better align with GPU execution, most notably the introduction of a maximum bucket size $m$. To our knowledge, \cf is the first GPU ANNS algorithm built upon LSF techniques. We demonstrate through extensive experimentation that \cf delivers dependable performance on modern datasets, especially compared to a CPU baseline and state-of-the-art GPU-enabled ANNS.
 
 \paragraph{Future Work.}
 
-There are several natural directions for extending \cf. Most notably, exploring a fully GPU-resident indexing design could allow \cf to realise further speed-ups by reducing CPU-GPU communication overhead. Additionally, \cf could be developed into a more widely applicable ANNS solver. For instance, quantisation-based approaches such as Product Quantisation~\cite{jegou2010product} or QJL~\cite{zandieh2025qjl} may help accelerate querying by enabling approximate distance computations with better memory trade-offs. Furthermore, \cf could be extended to support additional distance measures, including Euclidean distance or Jaccard similarity through embedding techniques~\cite{rahimi2007random, vedaldi2010efficient}.
+There are several natural directions for extending \cf. Most notably, exploring a fully GPU-resident indexing design could allow \cf to realise further speed-ups by reducing CPU-GPU communication overhead. Additionally, \cf could be developed into a more widely applicable ANNS solver. For instance, quantisation techniques such as Product Quantisation~\cite{jegou2010product} or QJL~\cite{zandieh2025qjl} may help accelerate querying by enabling accelerated approximate distance computations. Furthermore, \cf could be extended to support additional distance measures, including Euclidean distance or Jaccard similarity through embedding techniques~\cite{rahimi2007random, vedaldi2010efficient}.
 
-\cf could also be applied to accelerate the construction of approximate $k$-Nearest Neighbour graphs ($k$NN) by simply using the dataset $X$ as both the indexing and query point sets. These $k$NN graphs are foundational structures for a variety of techniques - for example, Pham et al. recently utilised them to develop a novel clustering technique \cite{pham2025scalable}.
+\cf could also be applied to accelerate the construction of approximate $k$-Nearest Neighbour graphs ($k$NN) by simply using the dataset $X$ as both the indexing and query point sets. These $k$NN graphs could be utilised as foundational structures for a variety of techniques, including clustering \cite{pham2025scalable} and NNS \cite{paredes2005using}.
 
-\bibliographystyle{plain}
+\clearpage
+\section{References}
+\begingroup
+\renewcommand{\section}[2]{} % suppress BibTeX heading if it appears
+\bibliographystyle{IEEEtran}
 \bibliography{refs}
+\endgroup
 
 \end{document}
